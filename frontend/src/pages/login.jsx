@@ -23,13 +23,13 @@ const LoginButton = styled.button`
 `;
 
 const Login = () => {
-  const handleSteamLogin = () => {
-    window.location.href = 'http://localhost:8000/auth/steam/login';
-  };
+const handleSteamLogin = () => {
+  window.location.href = 'http://localhost:8000/auth/steam/login';
+};
 
   return (
     <LoginContainer>
-      <LoginButton>Login with Steam</LoginButton>
+      <LoginButton onClick={handleSteamLogin}>Login with Steam</LoginButton>
     </LoginContainer>
   );
 };
