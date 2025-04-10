@@ -70,15 +70,6 @@ const ModalOverlay = styled.div`
   z-index: 2000;
 `;
 
-const ModalContent = styled.div`
-  background: #fff;
-  padding: 2rem;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90%;
-  text-align: center;
-`;
-
 const ModalButton = styled.button`
   background-color: ${props => props.primary ? '#66c0f4' : '#d8000c'};
   color: #fff;
@@ -105,23 +96,19 @@ const PriceTable = styled.div`
   text-align: left;
 `;
 
-const GameSelection = styled.div`
+const ModalContent = styled.div`
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 600px;
+  max-width: 90%;
   text-align: center;
-  margin: 2rem 0;
 `;
 
-const GameButton = styled.button`
-  background-color: #66c0f4;
-  color: #fff;
-  border: none;
-  padding: 1rem 2rem;
-  margin: 0 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1.2rem;
-  &:hover {
-    background-color: #8ed1ff;
-  }
+const ChartContainer = styled.div`
+  height: 300px;
+  width: 100%;
+  position: relative;
 `;
 
 const Dashboard = () => {
@@ -139,9 +126,20 @@ const Dashboard = () => {
   const fetchPrices = async (items, token) => {
     console.log('Starting fetchPrices with items:', items.length);
     const updatedInventory = [...items];
+    const cachedPrices = JSON.parse(localStorage.getItem('price_cache') || '{}');
+
     for (let i = 0; i < updatedInventory.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Задержка 2 секунды
       const item = updatedInventory[i];
+      const cacheKey = `${item.appid}:${item.market_hash_name}`;
+
+      // Проверяем кэш
+      if (cachedPrices[cacheKey]) {
+        console.log(`Using cached price for ${item.name}: ${cachedPrices[cacheKey]}`);
+        updatedInventory[i] = { ...item, price: cachedPrices[cacheKey] };
+        continue;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Задержка 2 секунды
       console.log(`Fetching price for ${item.name} (${item.market_hash_name})`);
       try {
         const response = await axios.get(`http://localhost:8000/auth/price`, {
@@ -149,11 +147,15 @@ const Dashboard = () => {
         });
         console.log(`Price response for ${item.name}:`, response.data);
         updatedInventory[i] = { ...item, price: response.data.price };
+        cachedPrices[cacheKey] = response.data.price; // Сохраняем в кэш
       } catch (error) {
         console.error(`Failed to fetch price for ${item.name}:`, error.response ? error.response.data : error.message);
         updatedInventory[i] = { ...item, price: 'N/A' };
+        cachedPrices[cacheKey] = 'N/A';
       }
     }
+
+    localStorage.setItem('price_cache', JSON.stringify(cachedPrices)); // Сохраняем кэш в localStorage
     setInventory(updatedInventory);
     setFilteredInventory(updatedInventory);
   };
@@ -279,9 +281,27 @@ const Dashboard = () => {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false, 
     scales: {
       x: { title: { display: true, text: 'Дата' } },
       y: { title: { display: true, text: 'Цена ($)' } }
+    },
+    plugins: {
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+        },
+        zoom: {
+          wheel: {
+            enabled: true,
+          },
+          pinch: {
+            enabled: true,
+          },
+          mode: 'x',
+        }
+      }
     }
   };
 
@@ -326,7 +346,9 @@ const Dashboard = () => {
                 Прогноз цены
               </ModalButton>
               {chartData ? (
-                <Line data={chartData} options={chartOptions} />
+                <ChartContainer>
+                  <Line data={chartData} options={chartOptions} />
+                </ChartContainer>
               ) : (
                 <ModalButton onClick={() => fetchHistory(selectedItem, localStorage.getItem('auth_token'))}>
                   {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
