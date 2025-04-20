@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-
+import 'chartjs-plugin-zoom';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -70,6 +70,21 @@ const ModalOverlay = styled.div`
   z-index: 2000;
 `;
 
+const ModalContent = styled.div`
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 600px;
+  max-width: 90%;
+  text-align: center;
+`;
+
+const ChartContainer = styled.div`
+  height: 300px;
+  width: 100%;
+  position: relative;
+`;
+
 const ModalButton = styled.button`
   background-color: ${props => props.primary ? '#66c0f4' : '#d8000c'};
   color: #fff;
@@ -96,19 +111,26 @@ const PriceTable = styled.div`
   text-align: left;
 `;
 
-const ModalContent = styled.div`
-  background: #fff;
-  padding: 2rem;
-  border-radius: 8px;
-  width: 600px;
-  max-width: 90%;
-  text-align: center;
+const LoadPricesButton = styled.button`
+  background-color: #66c0f4;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  &:hover {
+    background-color: #8ed1ff;
+  }
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
 `;
 
-const ChartContainer = styled.div`
-  height: 300px;
-  width: 100%;
-  position: relative;
+const ProgressText = styled.p`
+  margin: 0.5rem 0;
+  color: #333;
 `;
 
 const Dashboard = () => {
@@ -122,20 +144,28 @@ const Dashboard = () => {
   const [favorites, setFavorites] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [itemHistory, setItemHistory] = useState(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchPrices = async (items, token) => {
-    console.log('Starting fetchPrices with items:', items.length);
+  const fetchPrices = async (items, token, useCache = true) => {
+    setPriceLoading(true);
+    setLoadedCount(0);
+    setTotalCount(items.length);
+
+    const cachedPrices = useCache ? JSON.parse(localStorage.getItem('price_cache') || '{}') : {};
     const updatedInventory = [...items];
-    const cachedPrices = JSON.parse(localStorage.getItem('price_cache') || '{}');
 
     for (let i = 0; i < updatedInventory.length; i++) {
       const item = updatedInventory[i];
       const cacheKey = `${item.appid}:${item.market_hash_name}`;
 
-      // Проверяем кэш
-      if (cachedPrices[cacheKey]) {
+      if (useCache && cachedPrices[cacheKey]) {
         console.log(`Using cached price for ${item.name}: ${cachedPrices[cacheKey]}`);
         updatedInventory[i] = { ...item, price: cachedPrices[cacheKey] };
+        setLoadedCount(prev => prev + 1);
+        setInventory([...updatedInventory]);
+        setFilteredInventory([...updatedInventory]);
         continue;
       }
 
@@ -153,11 +183,14 @@ const Dashboard = () => {
         updatedInventory[i] = { ...item, price: 'N/A' };
         cachedPrices[cacheKey] = 'N/A';
       }
+
+      setLoadedCount(prev => prev + 1);
+      setInventory([...updatedInventory]);
+      setFilteredInventory([...updatedInventory]);
+      localStorage.setItem('price_cache', JSON.stringify(cachedPrices)); // Сохраняем кэш
     }
 
-    localStorage.setItem('price_cache', JSON.stringify(cachedPrices)); // Сохраняем кэш в localStorage
-    setInventory(updatedInventory);
-    setFilteredInventory(updatedInventory);
+    setPriceLoading(false);
   };
 
   const fetchHistory = async (item, token) => {
@@ -194,7 +227,6 @@ const Dashboard = () => {
         } else {
           setInventory(inventoryData);
           setFilteredInventory(inventoryData);
-          fetchPrices(inventoryData, token);
         }
         setLoading(false);
       })
@@ -281,7 +313,7 @@ const Dashboard = () => {
 
   const chartOptions = {
     responsive: true,
-    maintainAspectRatio: false, 
+    maintainAspectRatio: false,
     scales: {
       x: { title: { display: true, text: 'Дата' } },
       y: { title: { display: true, text: 'Цена ($)' } }
@@ -318,15 +350,26 @@ const Dashboard = () => {
         ) : inventoryError ? (
           <ErrorMessage>{inventoryError}</ErrorMessage>
         ) : (
-          <InventoryGrid>
-            {filteredInventory.map((item, index) => (
-              <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
-                <ItemImage src={item.icon_url} alt={item.name} />
-                <ItemName>{item.name}</ItemName>
-                <ItemPrice>{item.price || 'Загрузка...'}</ItemPrice>
-              </InventoryCard>
-            ))}
-          </InventoryGrid>
+          <>
+            <LoadPricesButton
+              onClick={() => fetchPrices(inventory, localStorage.getItem('auth_token'), false)}
+              disabled={priceLoading || inventory.length === 0}
+            >
+              {priceLoading ? 'Обновление цен...' : 'Загрузить/Обновить цены'}
+            </LoadPricesButton>
+            {priceLoading && (
+              <ProgressText>Загружено: {loadedCount}/{totalCount}</ProgressText>
+            )}
+            <InventoryGrid>
+              {filteredInventory.map((item, index) => (
+                <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
+                  <ItemImage src={item.icon_url} alt={item.name} />
+                  <ItemName>{item.name}</ItemName>
+                  <ItemPrice>{item.price || 'Ожидание...'}</ItemPrice>
+                </InventoryCard>
+              ))}
+            </InventoryGrid>
+          </>
         )}
         {selectedItem && (
           <ModalOverlay onClick={closeModal}>
