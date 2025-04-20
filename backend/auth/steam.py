@@ -121,12 +121,11 @@ async def get_inventory(token: str, appid: str):
         if not steam_id:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        # Проверяем, что appid валидный
         valid_appids = ["730", "570"]
         if appid not in valid_appids:
-            raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS:GO or 570 for Dota 2")
+            raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS2 or 570 for Dota 2")
 
-        games = [{"appid": appid, "contextid": "2"}]  # Загружаем только одну игру
+        games = [{"appid": appid, "contextid": "2"}]
         items = []
 
         for game in games:
@@ -167,14 +166,14 @@ async def get_inventory(token: str, appid: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch inventory: {str(e)}")
 
 @router.get("/price")
-async def get_price(token: str, market_hash_name: str, appid: str):
+async def get_price(token: str, market_hash_name: str, appid: str, force_refresh: bool = False):
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
         if not payload.get("steam_id"):
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         cache_key = f"{appid}:{market_hash_name}"
-        if cache_key in price_cache:
+        if not force_refresh and cache_key in price_cache:
             logger.debug(f"Returning cached price for {cache_key}")
             return price_cache[cache_key]
 
@@ -196,6 +195,22 @@ async def get_price(token: str, market_hash_name: str, appid: str):
     except Exception as e:
         logger.error(f"Failed to fetch price: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch price: {str(e)}")
+
+@router.get("/reset_cache")
+async def reset_cache(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        if not payload.get("steam_id"):
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        price_cache.clear()
+        logger.info("Server price cache cleared")
+        return {"message": "Cache cleared"}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to reset cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset cache: {str(e)}")
 
 @router.get("/history")
 async def get_history(token: str, market_hash_name: str, appid: str):
