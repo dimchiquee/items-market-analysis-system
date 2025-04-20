@@ -1,12 +1,11 @@
 import React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import styled from 'styled-components';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import 'chartjs-plugin-zoom';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -68,21 +67,69 @@ const ModalOverlay = styled.div`
   justify-content: center;
   align-items: center;
   z-index: 2000;
+  overflow: hidden;
 `;
 
 const ModalContent = styled.div`
   background: #fff;
   padding: 2rem;
   border-radius: 8px;
-  width: 600px;
-  max-width: 90%;
+  width: 700px;
+  max-width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const ItemInfoContainer = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`;
+
+const ImageWrapper = styled.div`
+  flex: 0 0 150px;
+`;
+
+const PriceWrapper = styled.div`
+  flex: 1;
+  text-align: left;
+`;
+
+const ChartButtonContainer = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 `;
 
 const ChartContainer = styled.div`
-  height: 300px;
-  width: 100%;
+  flex: 1;
+  height: 250px;
   position: relative;
+  background-color: #f0f0f0; /* Серый фон для пустого графика */
+  canvas {
+    max-height: 100% !important;
+    max-width: 100% !important;
+  }
+`;
+
+const ButtonContainer = styled.div`
+  flex: 0 0 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
 `;
 
 const ModalButton = styled.button`
@@ -92,7 +139,7 @@ const ModalButton = styled.button`
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
-  margin: 0.5rem;
+  width: 100%;
   &:hover {
     background-color: ${props => props.primary ? '#8ed1ff' : '#ff3333'};
   }
@@ -107,12 +154,11 @@ const ErrorMessage = styled.div`
 `;
 
 const PriceTable = styled.div`
-  margin: 1rem 0;
-  text-align: left;
+  margin: 0;
 `;
 
-const LoadPricesButton = styled.button`
-  background-color: #66c0f4;
+const ResetCacheButton = styled.button`
+  background-color: #d8000c;
   color: #fff;
   border: none;
   padding: 0.5rem 1rem;
@@ -120,7 +166,7 @@ const LoadPricesButton = styled.button`
   cursor: pointer;
   margin-bottom: 1rem;
   &:hover {
-    background-color: #8ed1ff;
+    background-color: #ff3333;
   }
   &:disabled {
     background-color: #cccccc;
@@ -147,8 +193,17 @@ const Dashboard = () => {
   const [priceLoading, setPriceLoading] = useState(false);
   const [loadedCount, setLoadedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const chartRef = useRef(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [chartState, setChartState] = useState({
+    xMin: null,
+    xMax: null,
+    yMin: null,
+    yMax: null
+  });
 
-  const fetchPrices = async (items, token, useCache = true) => {
+  const fetchPrices = async (items, token, useCache = true, forceRefresh = false) => {
     setPriceLoading(true);
     setLoadedCount(0);
     setTotalCount(items.length);
@@ -169,15 +224,15 @@ const Dashboard = () => {
         continue;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Задержка 2 секунды
+      await new Promise(resolve => setTimeout(resolve, 2000));
       console.log(`Fetching price for ${item.name} (${item.market_hash_name})`);
       try {
         const response = await axios.get(`http://localhost:8000/auth/price`, {
-          params: { token, market_hash_name: item.market_hash_name, appid: item.appid }
+          params: { token, market_hash_name: item.market_hash_name, appid: item.appid, force_refresh: forceRefresh }
         });
         console.log(`Price response for ${item.name}:`, response.data);
         updatedInventory[i] = { ...item, price: response.data.price };
-        cachedPrices[cacheKey] = response.data.price; // Сохраняем в кэш
+        cachedPrices[cacheKey] = response.data.price;
       } catch (error) {
         console.error(`Failed to fetch price for ${item.name}:`, error.response ? error.response.data : error.message);
         updatedInventory[i] = { ...item, price: 'N/A' };
@@ -187,10 +242,21 @@ const Dashboard = () => {
       setLoadedCount(prev => prev + 1);
       setInventory([...updatedInventory]);
       setFilteredInventory([...updatedInventory]);
-      localStorage.setItem('price_cache', JSON.stringify(cachedPrices)); // Сохраняем кэш
+      localStorage.setItem('price_cache', JSON.stringify(cachedPrices));
     }
 
     setPriceLoading(false);
+  };
+
+  const resetCache = async () => {
+    const token = localStorage.getItem('auth_token');
+    try {
+      localStorage.removeItem('price_cache');
+      await axios.get('http://localhost:8000/auth/reset_cache', { params: { token } });
+      fetchPrices(inventory, token, false, true);
+    } catch (error) {
+      console.error('Failed to reset cache:', error.response ? error.response.data : error.message);
+    }
   };
 
   const fetchHistory = async (item, token) => {
@@ -201,6 +267,7 @@ const Dashboard = () => {
       });
       console.log(`History response for ${item.name}:`, response.data);
       setItemHistory(response.data.history);
+      setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
     } catch (error) {
       console.error(`Failed to fetch history for ${item.name}:`, error.response ? error.response.data : error.message);
       setItemHistory([]);
@@ -227,6 +294,7 @@ const Dashboard = () => {
         } else {
           setInventory(inventoryData);
           setFilteredInventory(inventoryData);
+          fetchPrices(inventoryData, token, true, false);
         }
         setLoading(false);
       })
@@ -268,6 +336,111 @@ const Dashboard = () => {
     }
   }, [filters.game]);
 
+  useEffect(() => {
+    if (selectedItem) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [selectedItem]);
+
+  const handleChartWheel = (event) => {
+    const chart = chartRef.current;
+    if (!chart || !itemHistory) return;
+
+    const rect = chart.canvas.getBoundingClientRect();
+    const cursorX = event.clientX - rect.left;
+    const cursorY = event.clientY - rect.top;
+
+    let xMin = chart.options.scales.x.min ?? 0;
+    let xMax = chart.options.scales.x.max ?? itemHistory.length - 1;
+    let yMin = chart.options.scales.y.min ?? Math.min(...itemHistory.map(d => parseFloat(d[1]))) * 0.9;
+    let yMax = chart.options.scales.y.max ?? Math.max(...itemHistory.map(d => parseFloat(d[1]))) * 1.1;
+
+    const xFraction = cursorX / rect.width;
+    const yFraction = 1 - cursorY / rect.height;
+
+    const zoomFactor = event.deltaY < 0 ? 0.9 : 1.1;
+    const newXRange = (xMax - xMin) * zoomFactor;
+    const newYRange = (yMax - yMin) * zoomFactor;
+
+    const xCenter = xMin + (xMax - xMin) * xFraction;
+    const yCenter = yMin + (yMax - yMin) * yFraction;
+
+    xMin = xCenter - (newXRange * xFraction);
+    xMax = xCenter + (newXRange * (1 - xFraction));
+    yMin = yCenter - (newYRange * yFraction);
+    yMax = yCenter + (newYRange * (1 - yFraction));
+
+    xMin = Math.max(0, Math.min(xMin, itemHistory.length - 1));
+    xMax = Math.max(0, Math.min(xMax, itemHistory.length - 1));
+    yMin = Math.max(0, yMin);
+    yMax = Math.max(yMin + 0.01, yMax);
+
+    chart.options.scales.x.min = xMin;
+    chart.options.scales.x.max = xMax;
+    chart.options.scales.y.min = yMin;
+    chart.options.scales.y.max = yMax;
+
+    chart.update();
+    setChartState({ xMin, xMax, yMin, yMax });
+  };
+
+  const handleMouseDown = (event) => {
+    const chart = chartRef.current;
+    if (!chart || !itemHistory) return;
+
+    event.preventDefault();
+    setIsPanning(true);
+    setPanStart({ x: event.clientX, y: event.clientY });
+  };
+
+  const handleMouseMove = (event) => {
+    if (!isPanning || !chartRef.current || !itemHistory) return;
+
+    const chart = chartRef.current;
+    const rect = chart.canvas.getBoundingClientRect();
+
+    const deltaX = event.clientX - panStart.x;
+    const deltaY = event.clientY - panStart.y;
+
+    let xMin = chart.options.scales.x.min ?? 0;
+    let xMax = chart.options.scales.x.max ?? itemHistory.length - 1;
+    let yMin = chart.options.scales.y.min ?? Math.min(...itemHistory.map(d => parseFloat(d[1]))) * 0.9;
+    let yMax = chart.options.scales.y.max ?? Math.max(...itemHistory.map(d => parseFloat(d[1]))) * 1.1;
+
+    const xRange = xMax - xMin;
+    const yRange = yMax - yMin;
+    const xShift = (deltaX / rect.width) * xRange;
+    const yShift = (deltaY / rect.height) * yRange;
+
+    xMin -= xShift;
+    xMax -= xShift;
+    yMin += yShift;
+    yMax += yShift;
+
+    xMin = Math.max(0, Math.min(xMin, itemHistory.length - 1));
+    xMax = Math.max(0, Math.min(xMax, itemHistory.length - 1));
+    yMin = Math.max(0, yMin);
+    yMax = Math.max(yMin + 0.01, yMax);
+
+    chart.options.scales.x.min = xMin;
+    chart.options.scales.x.max = xMax;
+    chart.options.scales.y.min = yMin;
+    chart.options.scales.y.max = yMax;
+
+    chart.update();
+    setChartState({ xMin, xMax, yMin, yMax });
+    setPanStart({ x: event.clientX, y: event.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
+  };
+
   const handleSort = (sortType) => {
     let sorted = [...filteredInventory];
     if (sortType === 'price_asc') {
@@ -285,11 +458,13 @@ const Dashboard = () => {
   const handleItemClick = (item) => {
     setSelectedItem(item);
     setItemHistory(null);
+    setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
   };
 
   const closeModal = () => {
     setSelectedItem(null);
     setItemHistory(null);
+    setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
   };
 
   const addToFavorites = (item) => {
@@ -301,7 +476,10 @@ const Dashboard = () => {
   };
 
   const chartData = itemHistory ? {
-    labels: itemHistory.map(data => data[0].split(' ')[0] + ' ' + data[0].split(' ')[1]),
+    labels: itemHistory.map(data => {
+      const [day, month, year] = data[0].split(' ');
+      return `${day} ${month} ${year}`;
+    }),
     datasets: [{
       label: 'Цена ($)',
       data: itemHistory.map(data => parseFloat(data[1])),
@@ -315,24 +493,20 @@ const Dashboard = () => {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      x: { title: { display: true, text: 'Дата' } },
-      y: { title: { display: true, text: 'Цена ($)' } }
-    },
-    plugins: {
-      zoom: {
-        pan: {
-          enabled: true,
-          mode: 'x',
+      x: {
+        title: { display: true, text: 'Дата' },
+        ticks: {
+          maxTicksLimit: 8,
+          maxRotation: 45,
+          minRotation: 45
         },
-        zoom: {
-          wheel: {
-            enabled: true,
-          },
-          pinch: {
-            enabled: true,
-          },
-          mode: 'x',
-        }
+        min: chartState.xMin,
+        max: chartState.xMax
+      },
+      y: {
+        title: { display: true, text: 'Цена ($)' },
+        min: chartState.yMin,
+        max: chartState.yMax
       }
     }
   };
@@ -351,12 +525,12 @@ const Dashboard = () => {
           <ErrorMessage>{inventoryError}</ErrorMessage>
         ) : (
           <>
-            <LoadPricesButton
-              onClick={() => fetchPrices(inventory, localStorage.getItem('auth_token'), false)}
+            <ResetCacheButton
+              onClick={resetCache}
               disabled={priceLoading || inventory.length === 0}
             >
-              {priceLoading ? 'Обновление цен...' : 'Загрузить/Обновить цены'}
-            </LoadPricesButton>
+              {priceLoading ? 'Сброс кэша...' : 'Сбросить кэш'}
+            </ResetCacheButton>
             {priceLoading && (
               <ProgressText>Загружено: {loadedCount}/{totalCount}</ProgressText>
             )}
@@ -365,7 +539,7 @@ const Dashboard = () => {
                 <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
                   <ItemImage src={item.icon_url} alt={item.name} />
                   <ItemName>{item.name}</ItemName>
-                  <ItemPrice>{item.price || 'Ожидание...'}</ItemPrice>
+                  <ItemPrice>{item.price || 'Загрузка...'}</ItemPrice>
                 </InventoryCard>
               ))}
             </InventoryGrid>
@@ -375,29 +549,49 @@ const Dashboard = () => {
           <ModalOverlay onClick={closeModal}>
             <ModalContent onClick={(e) => e.stopPropagation()}>
               <h2>{selectedItem.name}</h2>
-              <ItemImage src={selectedItem.icon_url} alt={selectedItem.name} />
-              <PriceTable>
-                <p>Steam: {selectedItem.price || 'N/A'}</p>
-                <p>CS.Money: N/A</p>
-                <p>Tradeit.gg: N/A</p>
-                <p>Market.CSGO: N/A</p>
-              </PriceTable>
-              <ModalButton primary onClick={() => addToFavorites(selectedItem)}>
-                Добавить в избранное
-              </ModalButton>
-              <ModalButton onClick={() => predictPrice(selectedItem)}>
-                Прогноз цены
-              </ModalButton>
-              {chartData ? (
+              <ItemInfoContainer>
+                <ImageWrapper>
+                  <ItemImage src={selectedItem.icon_url} alt={selectedItem.name} />
+                </ImageWrapper>
+                <PriceWrapper>
+                  <PriceTable>
+                    <p>Steam: {selectedItem.price || 'N/A'}</p>
+                    <p>CS.Money: N/A</p>
+                    <p>Tradeit.gg: N/A</p>
+                    <p>Market.CSGO: N/A</p>
+                  </PriceTable>
+                </PriceWrapper>
+              </ItemInfoContainer>
+              <ChartButtonContainer>
                 <ChartContainer>
-                  <Line data={chartData} options={chartOptions} />
+                  {chartData && (
+                    <Line
+                      ref={chartRef}
+                      data={chartData}
+                      options={chartOptions}
+                      onWheel={handleChartWheel}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    />
+                  )}
                 </ChartContainer>
-              ) : (
-                <ModalButton onClick={() => fetchHistory(selectedItem, localStorage.getItem('auth_token'))}>
-                  {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
-                </ModalButton>
-              )}
-              <ModalButton onClick={closeModal}>Закрыть</ModalButton>
+                <ButtonContainer>
+                  <ModalButton onClick={() => fetchHistory(selectedItem, localStorage.getItem('auth_token'))}>
+                    {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
+                  </ModalButton>
+                  <ModalButton primary onClick={() => addToFavorites(selectedItem)}>
+                    Добавить в избранное
+                  </ModalButton>
+                  <ModalButton onClick={() => predictPrice(selectedItem)}>
+                    Прогноз цены
+                  </ModalButton>
+                  <ModalButton onClick={closeModal}>
+                    Закрыть
+                  </ModalButton>
+                </ButtonContainer>
+              </ChartButtonContainer>
             </ModalContent>
           </ModalOverlay>
         )}
