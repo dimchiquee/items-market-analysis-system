@@ -16,7 +16,7 @@ const SidebarContainer = styled.div`
 
 const FiltersContainer = styled.div`
   flex: 1;
-  overflow-y: auto; /* Прокрутка только для фильтров */
+  overflow-y: auto;
 `;
 
 const FilterSection = styled.div`
@@ -54,13 +54,13 @@ const Checkbox = styled.input`
 const ResetButtonContainer = styled.div`
   position: sticky;
   bottom: 0;
-  background-color: #1b2838; /* Фон кнопки совпадает с сайдбаром */
-  padding: 0.5rem 0; /* Уменьшили отступы */
+  background-color: #1b2838;
+  padding: 0.5rem 0;
 `;
 
 const ResetButton = styled.button`
-  width: 100%; /* Кнопка на всю ширину */
-  padding: 0.5rem; /* Уменьшили padding */
+  width: 100%;
+  padding: 0.5rem;
   background-color: #4c6b8a;
   color: #fff;
   border: none;
@@ -75,14 +75,14 @@ const ResetButton = styled.button`
   }
 `;
 
-const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
-  const cs2Types = ['', 'Pistol', 'Rifle', 'SMG', 'Sniper Rifle', 'Shotgun', 'Machine Gun', 'Knife', 'Gloves'];
-  const cs2Rarities = ['', 'Consumer Grade', 'Industrial Grade', 'Mil-Spec', 'Restricted', 'Classified', 'Covert'];
-  const cs2Wears = ['', 'Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred'];
+const Sidebar = ({ onSort, onFilter, game, cs2Filters, dota2Filters, onResetFilters }) => {
+const cs2Types = ["", "Pistol", "Rifle", "SMG", "Sniper Rifle", "Shotgun", "Machine Gun", "Knife", "Gloves"];
+const cs2Rarities = ["", "Consumer Grade", "Industrial Grade", "Mil-Spec", "Restricted", "Classified", "Covert"];
+const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
 
-  const dota2Rarities = ["Any", "Common", "Uncommon", "Rare", "Mythical", "Legendary", "Immortal", "Arcana", "Ancient"];
+  const dota2Rarities = ["", "Common", "Uncommon", "Rare", "Mythical", "Legendary", "Immortal", "Arcana", "Ancient"];
   const dota2Heroes = [
-    "Any", "Abaddon", "Alchemist", "Ancient Apparition", "Anti-Mage", "Anti-Mage (Wei)", "Arc Warden", "Axe", "Bane",
+    "", "Abaddon", "Alchemist", "Ancient Apparition", "Anti-Mage", "Anti-Mage (Wei)", "Arc Warden", "Axe", "Bane",
     "Batrider", "Beastmaster", "Bloodseeker", "Bounty Hunter", "Brewmaster", "Bristleback", "Broodmother",
     "Centaur Warrunner", "Chaos Knight", "Chen", "Clinkz", "Clockwerk", "Crystal Maiden", "Crystal Maiden (Wolf)",
     "Dark Seer", "Dark Willow", "Dazzle", "Death Prophet", "Disruptor", "Doom", "Dragon Knight", "Drow Ranger",
@@ -127,7 +127,10 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
               <>
                 <FilterSection>
                   <FilterTitle>Тип</FilterTitle>
-                  <Select onChange={(e) => onFilter('type', e.target.value)}>
+                  <Select
+                    onChange={(e) => onFilter('type', e.target.value)}
+                    value={cs2Filters.type} // Привязываем к текущему значению
+                  >
                     {cs2Types.map(type => (
                       <option key={type} value={type}>{type || 'Все'}</option>
                     ))}
@@ -135,7 +138,10 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
                 </FilterSection>
                 <FilterSection>
                   <FilterTitle>Редкость</FilterTitle>
-                  <Select onChange={(e) => onFilter('rarity', e.target.value)}>
+                  <Select
+                    onChange={(e) => onFilter('rarity', e.target.value)}
+                    value={cs2Filters.rarity} // Привязываем к текущему значению
+                  >
                     {cs2Rarities.map(rarity => (
                       <option key={rarity} value={rarity}>{rarity || 'Все'}</option>
                     ))}
@@ -143,7 +149,10 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
                 </FilterSection>
                 <FilterSection>
                   <FilterTitle>Качество</FilterTitle>
-                  <Select onChange={(e) => onFilter('wear', e.target.value)}>
+                  <Select
+                    onChange={(e) => onFilter('wear', e.target.value)}
+                    value={cs2Filters.wear} // Привязываем к текущему значению
+                  >
                     {cs2Wears.map(wear => (
                       <option key={wear} value={wear}>{wear || 'Все'}</option>
                     ))}
@@ -154,6 +163,7 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
                   <CheckboxLabel>
                     <Checkbox
                       type="checkbox"
+                      checked={cs2Filters.stattrak} // Привязываем к текущему значению
                       onChange={(e) => onFilter('stattrak', e.target.checked)}
                     />
                     Только StatTrak
@@ -166,7 +176,10 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
               <>
                 <FilterSection>
                   <FilterTitle>Герой</FilterTitle>
-                  <Select onChange={(e) => onFilter('hero', e.target.value)}>
+                  <Select
+                    onChange={(e) => onFilter('hero', e.target.value)}
+                    value={dota2Filters.hero} // Привязываем к текущему значению
+                  >
                     {dota2Heroes.map(hero => (
                       <option key={hero} value={hero}>{hero || 'Все'}</option>
                     ))}
@@ -174,7 +187,10 @@ const Sidebar = ({ onSort, onFilter, game, onResetFilters }) => {
                 </FilterSection>
                 <FilterSection>
                   <FilterTitle>Редкость</FilterTitle>
-                  <Select onChange={(e) => onFilter('rarity', e.target.value)}>
+                  <Select
+                    onChange={(e) => onFilter('rarity', e.target.value)}
+                    value={dota2Filters.rarity} // Привязываем к текущему значению
+                  >
                     {dota2Rarities.map(rarity => (
                       <option key={rarity} value={rarity}>{rarity || 'Все'}</option>
                     ))}

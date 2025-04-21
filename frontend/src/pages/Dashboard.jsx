@@ -9,7 +9,6 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-// Стили
 const DashboardContainer = styled.div`
   display: flex;
   min-height: 100vh;
@@ -194,11 +193,12 @@ const TotalValue = styled.div`
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
+  const [originalInventory, setOriginalInventory] = useState([]);
   const [filteredInventory, setFilteredInventory] = useState([]);
   const [filters, setFilters] = useState({
     game: '',
     cs2: { type: '', rarity: '', wear: '', stattrak: false },
-    dota2: { rarity: 'Any', hero: 'Any' } // Убрали slot и quality, синхронизировали с Sidebar.jsx
+    dota2: { rarity: 'Any', hero: 'Any' }
   });
   const [loading, setLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState(null);
@@ -288,6 +288,7 @@ const Dashboard = () => {
         updatedInventory[i] = { ...item, price: cachedPrices[cacheKey] };
         setLoadedCount(prev => prev + 1);
         setInventory([...updatedInventory]);
+        setOriginalInventory([...updatedInventory]);
         continue;
       }
 
@@ -308,6 +309,7 @@ const Dashboard = () => {
 
       setLoadedCount(prev => prev + 1);
       setInventory([...updatedInventory]);
+      setOriginalInventory([...updatedInventory]);
       localStorage.setItem('price_cache', JSON.stringify(cachedPrices));
     }
 
@@ -362,9 +364,11 @@ const Dashboard = () => {
         if (!inventoryData || inventoryData.length === 0) {
           setInventoryError('Ваш инвентарь для этой игры пуст или недоступен. Проверьте настройки приватности в Steam.');
           setInventory([]);
+          setOriginalInventory([]);
           setFilteredInventory([]);
         } else {
           setInventory(inventoryData);
+          setOriginalInventory(inventoryData);
           fetchPrices(inventoryData, token, true, false);
         }
         setLoading(false);
@@ -436,7 +440,8 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (inventory.length > 0) {
-      setFilteredInventory(applyFilters(inventory));
+      const filtered = applyFilters(inventory);
+      setFilteredInventory([...filtered]);
     }
   }, [filters, inventory]);
 
@@ -540,6 +545,9 @@ const Dashboard = () => {
       sorted.sort((a, b) => (parseFloat(a.price?.replace('$', '')) || 0) - (parseFloat(b.price?.replace('$', '')) || 0));
     } else if (sortType === 'price_desc') {
       sorted.sort((a, b) => (parseFloat(b.price?.replace('$', '')) || 0) - (parseFloat(a.price?.replace('$', '')) || 0));
+    } else if (sortType === '') {
+      const filtered = applyFilters(originalInventory);
+      sorted = [...filtered];
     }
     setFilteredInventory(sorted);
   };
@@ -550,7 +558,7 @@ const Dashboard = () => {
         ...prev,
         game: value,
         cs2: { type: '', rarity: '', wear: '', stattrak: false },
-        dota2: { rarity: 'Any', hero: 'Any' } // Сбрасываем фильтры при смене игры
+        dota2: { rarity: 'Any', hero: 'Any' }
       }));
     } else {
       const isCS2 = filters.game === '730';
@@ -564,13 +572,14 @@ const Dashboard = () => {
     }
   };
 
-  // Добавляем функцию для сброса фильтров
   const handleResetFilters = () => {
     setFilters({
-      game: filters.game, // Оставляем выбранную игру
+      game: filters.game,
       cs2: { type: '', rarity: '', wear: '', stattrak: false },
       dota2: { rarity: 'Any', hero: 'Any' }
     });
+    const resetFiltered = applyFilters(originalInventory);
+    setFilteredInventory([...resetFiltered]);
   };
 
   const handleItemClick = (item) => {
@@ -636,7 +645,9 @@ const Dashboard = () => {
         onSort={handleSort}
         onFilter={handleFilter}
         game={filters.game}
-        onResetFilters={handleResetFilters} // Передаём функцию сброса фильтров
+        cs2Filters={filters.cs2}
+        dota2Filters={filters.dota2}
+        onResetFilters={handleResetFilters}
       />
       <MainContent>
         <h1>Ваш инвентарь</h1>
