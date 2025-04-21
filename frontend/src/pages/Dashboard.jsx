@@ -9,6 +9,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
+// Стили
 const DashboardContainer = styled.div`
   display: flex;
   min-height: 100vh;
@@ -117,7 +118,7 @@ const ChartContainer = styled.div`
   flex: 1;
   height: 250px;
   position: relative;
-  background-color: #f0f0f0; /* Серый фон для пустого графика */
+  background-color: #f0f0f0;
   canvas {
     max-height: 100% !important;
     max-width: 100% !important;
@@ -194,7 +195,11 @@ const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [filteredInventory, setFilteredInventory] = useState([]);
-  const [filters, setFilters] = useState({ game: '' });
+  const [filters, setFilters] = useState({
+    game: '',
+    cs2: { type: '', rarity: '', wear: '', stattrak: false },
+    dota2: { rarity: 'Any', hero: 'Any' } // Убрали slot и quality, синхронизировали с Sidebar.jsx
+  });
   const [loading, setLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -218,10 +223,10 @@ const Dashboard = () => {
 
   const exchangeRate = {
     '$': 1,
-    '₽': 82.17,
-    '€': 0.88,
-    '¥JPY': 142.38,
-    '¥CNY': 7.30
+    '₽': 95,
+    '€': 0.92,
+    '¥JPY': 150,
+    '¥CNY': 7.10
   };
 
   const convertPrice = (price, fromCurrency = '$') => {
@@ -230,7 +235,6 @@ const Dashboard = () => {
     if (fromCurrency === currency) return `${numericPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
 
     const priceInUSD = fromCurrency === '$' ? numericPrice : numericPrice / exchangeRate[fromCurrency];
-
     const convertedPrice = currency === '$' ? priceInUSD : priceInUSD * exchangeRate[currency];
     return `${convertedPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
   };
@@ -243,6 +247,28 @@ const Dashboard = () => {
       return sum + priceInSelectedCurrency;
     }, 0);
     setTotalInventoryValue(total.toFixed(2));
+  };
+
+  const applyFilters = (items) => {
+    return items.filter(item => {
+      const isCS2 = item.appid === '730';
+      const filter = isCS2 ? filters.cs2 : filters.dota2;
+      const properties = item.properties || {};
+
+      if (isCS2) {
+        return (
+          (!filter.type || properties.type === filter.type) &&
+          (!filter.rarity || properties.rarity === filter.rarity) &&
+          (!filter.wear || properties.wear?.includes(filter.wear)) &&
+          (!filter.stattrak || (filter.stattrak && properties.attributes?.includes('stattrak_available')))
+        );
+      } else {
+        return (
+          (filter.rarity === 'Any' || !filter.rarity || properties.rarity === filter.rarity) &&
+          (filter.hero === 'Any' || !filter.hero || properties.hero === filter.hero)
+        );
+      }
+    });
   };
 
   const fetchPrices = async (items, token, useCache = true, forceRefresh = false) => {
@@ -262,7 +288,6 @@ const Dashboard = () => {
         updatedInventory[i] = { ...item, price: cachedPrices[cacheKey] };
         setLoadedCount(prev => prev + 1);
         setInventory([...updatedInventory]);
-        setFilteredInventory([...updatedInventory]);
         continue;
       }
 
@@ -283,11 +308,11 @@ const Dashboard = () => {
 
       setLoadedCount(prev => prev + 1);
       setInventory([...updatedInventory]);
-      setFilteredInventory([...updatedInventory]);
       localStorage.setItem('price_cache', JSON.stringify(cachedPrices));
     }
 
     setPriceLoading(false);
+    setFilteredInventory(applyFilters(updatedInventory));
   };
 
   const resetCache = async () => {
@@ -340,7 +365,6 @@ const Dashboard = () => {
           setFilteredInventory([]);
         } else {
           setInventory(inventoryData);
-          setFilteredInventory(inventoryData);
           fetchPrices(inventoryData, token, true, false);
         }
         setLoading(false);
@@ -409,6 +433,12 @@ const Dashboard = () => {
       setItemHistory(convertedHistory);
     }
   }, [currency]);
+
+  useEffect(() => {
+    if (inventory.length > 0) {
+      setFilteredInventory(applyFilters(inventory));
+    }
+  }, [filters, inventory]);
 
   const handleChartWheel = (event) => {
     const chart = chartRef.current;
@@ -515,7 +545,32 @@ const Dashboard = () => {
   };
 
   const handleFilter = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    if (key === 'game') {
+      setFilters(prev => ({
+        ...prev,
+        game: value,
+        cs2: { type: '', rarity: '', wear: '', stattrak: false },
+        dota2: { rarity: 'Any', hero: 'Any' } // Сбрасываем фильтры при смене игры
+      }));
+    } else {
+      const isCS2 = filters.game === '730';
+      setFilters(prev => ({
+        ...prev,
+        [isCS2 ? 'cs2' : 'dota2']: {
+          ...prev[isCS2 ? 'cs2' : 'dota2'],
+          [key]: value
+        }
+      }));
+    }
+  };
+
+  // Добавляем функцию для сброса фильтров
+  const handleResetFilters = () => {
+    setFilters({
+      game: filters.game, // Оставляем выбранную игру
+      cs2: { type: '', rarity: '', wear: '', stattrak: false },
+      dota2: { rarity: 'Any', hero: 'Any' }
+    });
   };
 
   const handleItemClick = (item) => {
@@ -577,7 +632,12 @@ const Dashboard = () => {
   return (
     <DashboardContainer>
       <Navbar user={user} currency={currency} setCurrency={setCurrency} />
-      <Sidebar onSort={handleSort} onFilter={handleFilter} />
+      <Sidebar
+        onSort={handleSort}
+        onFilter={handleFilter}
+        game={filters.game}
+        onResetFilters={handleResetFilters} // Передаём функцию сброса фильтров
+      />
       <MainContent>
         <h1>Ваш инвентарь</h1>
         {!filters.game && !loading ? (
