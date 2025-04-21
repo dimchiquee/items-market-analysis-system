@@ -62,11 +62,24 @@ const LogoutButton = styled.button`
   }
 `;
 
-const Navbar = ({ user }) => {
+const CurrencySelect = styled.select`
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: none;
+  background-color: #2a2a2a;
+  color: #fff;
+  cursor: pointer;
+  &:focus {
+    outline: none;
+  }
+`;
+
+const Navbar = ({ user, currency, setCurrency }) => {
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
     window.location.href = '/';
   };
+
 
   return (
     <NavbarContainer>
@@ -78,6 +91,13 @@ const Navbar = ({ user }) => {
       </NavLinks>
       {user && (
         <UserInfo>
+        <CurrencySelect value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          <option value="$">USD ($)</option>
+          <option value="₽">RUB (₽)</option>
+          <option value="€">EUR (€)</option>
+          <option value="¥JPY">JPY (¥)</option>
+          <option value="¥CNY">CNY (¥)</option>
+        </CurrencySelect>
           <Username>{user.username}</Username>
           <Avatar src={user.avatar} alt="User Avatar" />
           <LogoutButton onClick={handleLogout}>Выйти</LogoutButton>

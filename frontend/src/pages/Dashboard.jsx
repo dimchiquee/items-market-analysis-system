@@ -179,6 +179,17 @@ const ProgressText = styled.p`
   color: #333;
 `;
 
+const TotalValue = styled.div`
+  background-color: #fff;
+  padding: 1rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+`;
+
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
@@ -202,6 +213,37 @@ const Dashboard = () => {
     yMin: null,
     yMax: null
   });
+  const [currency, setCurrency] = useState('$');
+  const [totalInventoryValue, setTotalInventoryValue] = useState(0);
+
+  const exchangeRate = {
+    '$': 1,
+    '₽': 82.17,
+    '€': 0.88,
+    '¥JPY': 142.38,
+    '¥CNY': 7.30
+  };
+
+  const convertPrice = (price, fromCurrency = '$') => {
+    if (!price || price === 'N/A' || price === 'Загрузка...') return price;
+    const numericPrice = parseFloat(price.replace('$', '')) || 0;
+    if (fromCurrency === currency) return `${numericPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
+
+    const priceInUSD = fromCurrency === '$' ? numericPrice : numericPrice / exchangeRate[fromCurrency];
+
+    const convertedPrice = currency === '$' ? priceInUSD : priceInUSD * exchangeRate[currency];
+    return `${convertedPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
+  };
+
+  const calculateTotalInventoryValue = () => {
+    const total = filteredInventory.reduce((sum, item) => {
+      if (!item.price || item.price === 'N/A' || item.price === 'Загрузка...') return sum;
+      const numericPrice = parseFloat(item.price.replace('$', '')) || 0;
+      const priceInSelectedCurrency = currency === '$' ? numericPrice : numericPrice * exchangeRate[currency];
+      return sum + priceInSelectedCurrency;
+    }, 0);
+    setTotalInventoryValue(total.toFixed(2));
+  };
 
   const fetchPrices = async (items, token, useCache = true, forceRefresh = false) => {
     setPriceLoading(true);
@@ -266,7 +308,12 @@ const Dashboard = () => {
         params: { token, market_hash_name: item.market_hash_name, appid: item.appid }
       });
       console.log(`History response for ${item.name}:`, response.data);
-      setItemHistory(response.data.history);
+      const convertedHistory = response.data.history.map(data => {
+        const price = parseFloat(data[1]);
+        const convertedPrice = currency === '$' ? price : price * exchangeRate[currency];
+        return [data[0], convertedPrice.toString()];
+      });
+      setItemHistory(convertedHistory);
       setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
     } catch (error) {
       console.error(`Failed to fetch history for ${item.name}:`, error.response ? error.response.data : error.message);
@@ -346,6 +393,22 @@ const Dashboard = () => {
       document.body.style.overflow = 'auto';
     };
   }, [selectedItem]);
+
+  useEffect(() => {
+    calculateTotalInventoryValue();
+  }, [filteredInventory, currency]);
+
+  useEffect(() => {
+    if (itemHistory) {
+      const convertedHistory = itemHistory.map(data => {
+        const price = parseFloat(data[1]);
+        const priceInUSD = currency === '$' ? price : price / exchangeRate[currency];
+        const convertedPrice = currency === '$' ? priceInUSD : priceInUSD * exchangeRate[currency];
+        return [data[0], convertedPrice.toString()];
+      });
+      setItemHistory(convertedHistory);
+    }
+  }, [currency]);
 
   const handleChartWheel = (event) => {
     const chart = chartRef.current;
@@ -481,7 +544,7 @@ const Dashboard = () => {
       return `${day} ${month} ${year}`;
     }),
     datasets: [{
-      label: 'Цена ($)',
+      label: `Цена (${currency === '¥JPY' ? '¥ (JPY)' : currency === '¥CNY' ? '¥ (CNY)' : currency})`,
       data: itemHistory.map(data => parseFloat(data[1])),
       fill: false,
       borderColor: '#66c0f4',
@@ -504,7 +567,7 @@ const Dashboard = () => {
         max: chartState.xMax
       },
       y: {
-        title: { display: true, text: 'Цена ($)' },
+        title: { display: true, text: `Цена (${currency === '¥JPY' ? '¥ (JPY)' : currency === '¥CNY' ? '¥ (CNY)' : currency})` },
         min: chartState.yMin,
         max: chartState.yMax
       }
@@ -513,7 +576,7 @@ const Dashboard = () => {
 
   return (
     <DashboardContainer>
-      <Navbar user={user} />
+      <Navbar user={user} currency={currency} setCurrency={setCurrency} />
       <Sidebar onSort={handleSort} onFilter={handleFilter} />
       <MainContent>
         <h1>Ваш инвентарь</h1>
@@ -525,6 +588,9 @@ const Dashboard = () => {
           <ErrorMessage>{inventoryError}</ErrorMessage>
         ) : (
           <>
+            <TotalValue>
+              Стоимость инвентаря: {totalInventoryValue}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
+            </TotalValue>
             <ResetCacheButton
               onClick={resetCache}
               disabled={priceLoading || inventory.length === 0}
@@ -539,7 +605,7 @@ const Dashboard = () => {
                 <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
                   <ItemImage src={item.icon_url} alt={item.name} />
                   <ItemName>{item.name}</ItemName>
-                  <ItemPrice>{item.price || 'Загрузка...'}</ItemPrice>
+                  <ItemPrice>{convertPrice(item.price)}</ItemPrice>
                 </InventoryCard>
               ))}
             </InventoryGrid>
@@ -555,7 +621,7 @@ const Dashboard = () => {
                 </ImageWrapper>
                 <PriceWrapper>
                   <PriceTable>
-                    <p>Steam: {selectedItem.price || 'N/A'}</p>
+                    <p>Steam: {convertPrice(selectedItem.price)}</p>
                     <p>CS.Money: N/A</p>
                     <p>Tradeit.gg: N/A</p>
                     <p>Market.CSGO: N/A</p>
