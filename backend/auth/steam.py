@@ -424,7 +424,6 @@ async def get_inventory(token: str, appid: str):
                                         break
 
                         if appid == "570":
-                            # Извлекаем редкость из tags
                             for tag in desc.get("tags", []):
                                 category = tag.get("category")
                                 if category == "Rarity" and not properties["rarity"]:
@@ -449,14 +448,12 @@ async def get_inventory(token: str, appid: str):
                                     }
                                     mapped_rarity = rarity_mapping.get(rarity_value, tag.get("localized_tag_name", "").title())
                                     properties["rarity"] = mapped_rarity.title()
-                            # Извлекаем героя из descriptions
                             if not properties["hero"]:
                                 for desc_item in desc.get("descriptions", []):
                                     if "Used By:" in desc_item.get("value", ""):
                                         hero = desc_item["value"].replace("Used By: ", "").strip()
                                         properties["hero"] = hero
                                         break
-                            # Мы убрали фильтр по слоту, но оставим извлечение для совместимости
                             if not properties["slot"]:
                                 name_lower = market_hash_name.lower()
                                 if "head" in name_lower:
@@ -469,7 +466,6 @@ async def get_inventory(token: str, appid: str):
                                     properties["slot"] = "Weapon"
                                 elif "shoulders" in name_lower:
                                     properties["slot"] = "Shoulders"
-                            # Добавляем логирование для отладки
                             logger.info(f"Dota 2 item: {market_hash_name}, Rarity: {properties['rarity']}, Hero: {properties['hero']}")
 
                         items.append({
@@ -508,7 +504,7 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
             return price_cache[cache_key]
 
         logger.debug(f"Fetching price for {market_hash_name} (appid: {appid})")
-        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
+        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
         price_response = session.get(price_url, timeout=10)
         logger.debug(f"Price URL: {price_url}")
         logger.debug(f"Price response: {price_response.status_code} - {price_response.text}")
