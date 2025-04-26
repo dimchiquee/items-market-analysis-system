@@ -36,9 +36,11 @@ SCHEMA_CACHE_PATH = CACHE_DIR / "schemas"
 SCHEMA_CACHE_PATH.mkdir(exist_ok=True)
 PRICE_CACHE_PATH = CACHE_DIR / "prices.json"
 HISTORY_CACHE_PATH = CACHE_DIR / "history.json"
+POPULAR_ITEMS_CACHE_PATH = CACHE_DIR / "popular_items.json"
 
 price_cache: Dict[str, Dict] = {}
 history_cache: Dict[str, List] = {}
+popular_items_cache: Dict[str, List] = {}
 
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
@@ -64,8 +66,19 @@ def save_history_cache(cache: Dict[str, List]):
     with open(HISTORY_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
 
+def load_popular_items_cache() -> Dict[str, List]:
+    if POPULAR_ITEMS_CACHE_PATH.exists():
+        with open(POPULAR_ITEMS_CACHE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_popular_items_cache(cache: Dict[str, List]):
+    with open(POPULAR_ITEMS_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+
 price_cache = load_price_cache()
 history_cache = load_history_cache()
+popular_items_cache = load_popular_items_cache()
 
 def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
     schema_file = SCHEMA_CACHE_PATH / f"{appid}_schema.json"
@@ -499,6 +512,7 @@ def get_market_csgo_price(market_hash_name: str):
 
     return prices.get(market_hash_name, "N/A")
 
+
 def fetch_market_dota2_prices():
     try:
         response = session.get("https://market.dota2.net/api/v2/prices/USD.json", timeout=10)
@@ -521,6 +535,7 @@ def get_market_dota2_price(market_hash_name: str):
         save_price_cache(price_cache)
 
     return prices.get(market_hash_name, "N/A")
+
 
 def fetch_lis_skins_prices(appid: str):
     try:
@@ -557,7 +572,7 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
             return price_cache[cache_key]
 
         logger.debug(f"Fetching price for {market_hash_name} (appid: {appid})")
-        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
+        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
         price_response = session.get(price_url, timeout=10)
         logger.debug(f"Price URL: {price_url}")
         logger.debug(f"Price response: {price_response.status_code} - {price_response.text}")
@@ -565,13 +580,16 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
         price_data = price_response.json() if price_response.status_code == 200 else {}
         steam_price = price_data.get('lowest_price', 'N/A')
 
+
         lis_skins_price = get_lis_skins_price(market_hash_name, appid)
+
 
         if appid == "730":
             market_csgo_price = get_market_csgo_price(market_hash_name)
             result = {
                 "steam_price": steam_price,
                 "market_csgo_price": market_csgo_price,
+                "cs_money_price": "N/A",
                 "lis_skins_price": f"${lis_skins_price}" if lis_skins_price != "N/A" else "N/A"
             }
         else:
@@ -601,11 +619,14 @@ async def reset_cache(token: str):
 
         price_cache.clear()
         history_cache.clear()
+        popular_items_cache.clear()
         if PRICE_CACHE_PATH.exists():
             PRICE_CACHE_PATH.unlink()
         if HISTORY_CACHE_PATH.exists():
             HISTORY_CACHE_PATH.unlink()
-        logger.info("Server price and history cache cleared")
+        if POPULAR_ITEMS_CACHE_PATH.exists():
+            POPULAR_ITEMS_CACHE_PATH.unlink()
+        logger.info("Server price, history, and popular items cache cleared")
         return {"message": "Cache cleared"}
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -635,7 +656,7 @@ async def get_history(token: str, market_hash_name: str, appid: str):
 
         if not history_data:
             logger.warning(f"No history data found for {market_hash_name}")
-            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
+            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
             price_response = session.get(price_url, timeout=10)
             price_data = price_response.json() if price_response.status_code == 200 else {}
             if price_data.get('lowest_price'):
@@ -652,3 +673,65 @@ async def get_history(token: str, market_hash_name: str, appid: str):
     except Exception as e:
         logger.error(f"Failed to fetch history: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
+
+@router.get("/popular_items")
+async def get_popular_items(appid: str, force_refresh: bool = False):
+    try:
+        valid_appids = ["730", "570"]
+        if appid not in valid_appids:
+            raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS2 or 570 for Dota 2")
+
+        cache_key = f"popular_items_{appid}"
+        if force_refresh and cache_key in popular_items_cache:
+            logger.debug(f"Clearing cache for appid {appid} due to force_refresh")
+            del popular_items_cache[cache_key]
+            if POPULAR_ITEMS_CACHE_PATH.exists():
+                save_popular_items_cache(popular_items_cache)
+
+        if not force_refresh and cache_key in popular_items_cache:
+            logger.debug(f"Returning cached popular items for appid {appid}")
+            return {"items": popular_items_cache[cache_key]}
+
+        logger.debug(f"Fetching popular items for appid {appid} from Steam Market")
+
+        if force_refresh:
+            time.sleep(2)
+        url = f"https://steamcommunity.com/market/search/render/?appid={appid}&norender=1&count=10"
+        response = session.get(url, timeout=10)
+        logger.debug(f"Popular items response: {response.status_code} - {response.text[:200]}")
+
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch popular items for appid {appid}: HTTP {response.status_code}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch popular items: HTTP {response.status_code}")
+
+        data = response.json()
+        if not data.get("success"):
+            logger.error(f"Failed to fetch popular items for appid {appid}: API returned success=false")
+            raise HTTPException(status_code=500, detail="Failed to fetch popular items: API error")
+
+        items = []
+        for listing in data.get("results", [])[:10]:
+            name = listing.get("name", "Unknown Item")
+            price = listing.get("sell_price_text", "N/A")
+            icon_url = listing.get("asset_description", {}).get("icon_url", "")
+            icon_url = f"https://steamcommunity-a.akamaihd.net/economy/image/{icon_url}" if icon_url else "https://via.placeholder.com/150"
+            item_url = f"https://steamcommunity.com/market/listings/{appid}/{quote(name)}"
+
+            items.append({
+                "name": name,
+                "price": price,
+                "icon_url": icon_url,
+                "item_url": item_url
+            })
+
+        if not items:
+            logger.warning(f"No popular items found for appid {appid}")
+            raise HTTPException(status_code=404, detail="No popular items found")
+
+        popular_items_cache[cache_key] = items
+        save_popular_items_cache(popular_items_cache)
+        logger.info(f"Popular items fetched for appid {appid}: {len(items)} items")
+        return {"items": items}
+    except Exception as e:
+        logger.error(f"Failed to fetch popular items: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch popular items: {str(e)}")
