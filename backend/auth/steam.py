@@ -43,7 +43,7 @@ history_cache: Dict[str, List] = {}
 popular_items_cache: Dict[str, List] = {}
 
 session = requests.Session()
-retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
 session.mount("https://", HTTPAdapter(max_retries=retries))
 
 def load_price_cache() -> Dict[str, Dict]:
@@ -489,6 +489,7 @@ async def get_inventory(token: str, appid: str):
         logger.error(f"Failed to fetch inventory: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch inventory: {str(e)}")
 
+
 def fetch_market_csgo_prices():
     try:
         response = session.get("https://market.csgo.com/api/v2/prices/USD.json", timeout=10)
@@ -589,7 +590,7 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
             result = {
                 "steam_price": steam_price,
                 "market_csgo_price": market_csgo_price,
-                "cs_money_price": "N/A",
+
                 "lis_skins_price": f"${lis_skins_price}" if lis_skins_price != "N/A" else "N/A"
             }
         else:
@@ -693,7 +694,6 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
             return {"items": popular_items_cache[cache_key]}
 
         logger.debug(f"Fetching popular items for appid {appid} from Steam Market")
-
         if force_refresh:
             time.sleep(2)
         url = f"https://steamcommunity.com/market/search/render/?appid={appid}&norender=1&count=10"
@@ -735,3 +735,58 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
     except Exception as e:
         logger.error(f"Failed to fetch popular items: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch popular items: {str(e)}")
+
+@router.get("/search_items")
+async def search_items(appid: str, query: str):
+    try:
+        valid_appids = ["730", "570"]
+        if appid not in valid_appids:
+            raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS2 or 570 for Dota 2")
+
+        if not query or len(query.strip()) < 1:
+            raise HTTPException(status_code=400, detail="Query must not be empty")
+
+        logger.debug(f"Searching items for appid {appid} with query '{query}'")
+        url = f"https://steamcommunity.com/market/search/render/?query={quote(query)}&appid={appid}&norender=1"
+        response = session.get(url, timeout=10)
+        logger.debug(f"Search items response: {response.status_code} - {response.text[:200]}")
+
+        if response.status_code != 200:
+            error_detail = f"Failed to search items: HTTP {response.status_code}"
+            if response.status_code == 429:
+                error_detail = "Слишком много запросов к Steam Market. Попробуйте снова через несколько минут."
+            logger.error(f"Failed to search items for appid {appid}: HTTP {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail=error_detail)
+
+        data = response.json()
+        if not data.get("success"):
+            logger.error(f"Failed to search items for appid {appid}: API returned success=false - {data}")
+            raise HTTPException(status_code=500, detail="Steam Market API вернул ошибку. Попробуйте снова позже.")
+
+        items = []
+        for listing in data.get("results", [])[:20]:
+            name = listing.get("name", "Unknown Item")
+            price = listing.get("sell_price_text", "N/A")
+            icon_url = listing.get("asset_description", {}).get("icon_url", "")
+            icon_url = f"https://steamcommunity-a.akamaihd.net/economy/image/{icon_url}" if icon_url else "https://via.placeholder.com/150"
+            item_url = f"https://steamcommunity.com/market/listings/{appid}/{quote(name)}"
+
+            items.append({
+                "name": name,
+                "price": price,
+                "icon_url": icon_url,
+                "item_url": item_url
+            })
+
+        if not items:
+            logger.warning(f"No items found for appid {appid} with query '{query}'")
+            return {"items": []}
+
+        logger.info(f"Found {len(items)} items for appid {appid} with query '{query}'")
+        return {"items": items}
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error while searching items: {str(e)}")
+        raise HTTPException(status_code=500, detail="Не удалось связаться с Steam Market. Проверьте интернет-соединение и попробуйте снова.")
+    except Exception as e:
+        logger.error(f"Failed to search items: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Произошла ошибка при поиске: {str(e)}")
