@@ -219,7 +219,9 @@ const Dashboard = () => {
     yMax: null
   });
   const [currency, setCurrency] = useState('$');
-  const [totalInventoryValue, setTotalInventoryValue] = useState(0);
+  const [totalInventoryValueSteam, setTotalInventoryValueSteam] = useState(0);
+  const [totalInventoryValueMarket, setTotalInventoryValueMarket] = useState(0);
+  const [totalInventoryValueLisSkins, setTotalInventoryValueLisSkins] = useState(0);
 
   const exchangeRate = {
     '$': 1,
@@ -240,13 +242,37 @@ const Dashboard = () => {
   };
 
   const calculateTotalInventoryValue = () => {
-    const total = filteredInventory.reduce((sum, item) => {
-      if (!item.price || item.price === 'N/A' || item.price === 'Загрузка...') return sum;
-      const numericPrice = parseFloat(item.price.replace('$', '')) || 0;
-      const priceInSelectedCurrency = currency === '$' ? numericPrice : numericPrice * exchangeRate[currency];
-      return sum + priceInSelectedCurrency;
-    }, 0);
-    setTotalInventoryValue(total.toFixed(2));
+    let totalSteam = 0;
+    let totalMarket = 0;
+    let totalLisSkins = 0;
+
+    filteredInventory.forEach(item => {
+      // Цена Steam
+      if (item.steam_price && item.steam_price !== 'N/A' && item.steam_price !== 'Загрузка...') {
+        const numericPrice = parseFloat(item.steam_price.replace('$', '')) || 0;
+        const priceInSelectedCurrency = currency === '$' ? numericPrice : numericPrice * exchangeRate[currency];
+        totalSteam += priceInSelectedCurrency;
+      }
+
+      // Цена Market (Market.CSGO для CS2, Market.Dota2 для Dota 2)
+      const marketPrice = item.appid === '730' ? item.market_csgo_price : item.market_dota2_price;
+      if (marketPrice && marketPrice !== 'N/A' && marketPrice !== 'Загрузка...') {
+        const numericMarketPrice = parseFloat(marketPrice.replace('$', '')) || 0;
+        const marketPriceInSelectedCurrency = currency === '$' ? numericMarketPrice : numericMarketPrice * exchangeRate[currency];
+        totalMarket += marketPriceInSelectedCurrency;
+      }
+
+      // Цена Lis-Skins
+      if (item.lis_skins_price && item.lis_skins_price !== 'N/A' && item.lis_skins_price !== 'Загрузка...') {
+        const numericLisSkinsPrice = parseFloat(item.lis_skins_price.replace('$', '')) || 0;
+        const lisSkinsPriceInSelectedCurrency = currency === '$' ? numericLisSkinsPrice : numericLisSkinsPrice * exchangeRate[currency];
+        totalLisSkins += lisSkinsPriceInSelectedCurrency;
+      }
+    });
+
+    setTotalInventoryValueSteam(totalSteam.toFixed(2));
+    setTotalInventoryValueMarket(totalMarket.toFixed(2));
+    setTotalInventoryValueLisSkins(totalLisSkins.toFixed(2));
   };
 
   const applyFilters = (items) => {
@@ -285,7 +311,7 @@ const Dashboard = () => {
 
       if (useCache && cachedPrices[cacheKey]) {
         console.log(`Using cached price for ${item.name}: ${cachedPrices[cacheKey]}`);
-        updatedInventory[i] = { ...item, price: cachedPrices[cacheKey] };
+        updatedInventory[i] = { ...item, ...cachedPrices[cacheKey] };
         setLoadedCount(prev => prev + 1);
         setInventory([...updatedInventory]);
         setOriginalInventory([...updatedInventory]);
@@ -299,12 +325,35 @@ const Dashboard = () => {
           params: { token, market_hash_name: item.market_hash_name, appid: item.appid, force_refresh: forceRefresh }
         });
         console.log(`Price response for ${item.name}:`, response.data);
-        updatedInventory[i] = { ...item, price: response.data.price };
-        cachedPrices[cacheKey] = response.data.price;
+        updatedInventory[i] = { ...item, ...response.data };
+        cachedPrices[cacheKey] = response.data;
       } catch (error) {
         console.error(`Failed to fetch price for ${item.name}:`, error.response ? error.response.data : error.message);
-        updatedInventory[i] = { ...item, price: 'N/A' };
-        cachedPrices[cacheKey] = 'N/A';
+        if (item.appid === '730') {
+          updatedInventory[i] = {
+            ...item,
+            steam_price: 'N/A',
+            market_csgo_price: 'N/A',
+            lis_skins_price: 'N/A'
+          };
+          cachedPrices[cacheKey] = {
+            steam_price: 'N/A',
+            market_csgo_price: 'N/A',
+            lis_skins_price: 'N/A'
+          };
+        } else {
+          updatedInventory[i] = {
+            ...item,
+            steam_price: 'N/A',
+            market_dota2_price: 'N/A',
+            lis_skins_price: 'N/A'
+          };
+          cachedPrices[cacheKey] = {
+            steam_price: 'N/A',
+            market_dota2_price: 'N/A',
+            lis_skins_price: 'N/A'
+          };
+        }
       }
 
       setLoadedCount(prev => prev + 1);
@@ -542,9 +591,9 @@ const Dashboard = () => {
   const handleSort = (sortType) => {
     let sorted = [...filteredInventory];
     if (sortType === 'price_asc') {
-      sorted.sort((a, b) => (parseFloat(a.price?.replace('$', '')) || 0) - (parseFloat(b.price?.replace('$', '')) || 0));
+      sorted.sort((a, b) => (parseFloat(a.steam_price?.replace('$', '')) || 0) - (parseFloat(b.steam_price?.replace('$', '')) || 0));
     } else if (sortType === 'price_desc') {
-      sorted.sort((a, b) => (parseFloat(b.price?.replace('$', '')) || 0) - (parseFloat(a.price?.replace('$', '')) || 0));
+      sorted.sort((a, b) => (parseFloat(b.steam_price?.replace('$', '')) || 0) - (parseFloat(a.steam_price?.replace('$', '')) || 0));
     } else if (sortType === '') {
       const filtered = applyFilters(originalInventory);
       sorted = [...filtered];
@@ -660,7 +709,11 @@ const Dashboard = () => {
         ) : (
           <>
             <TotalValue>
-              Стоимость инвентаря: {totalInventoryValue}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
+              Стоимость инвентаря (Steam): {totalInventoryValueSteam}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
+              <br />
+              Стоимость инвентаря ({filters.game === '730' ? 'Market.CSGO' : 'Market.Dota2'}): {totalInventoryValueMarket}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
+              <br />
+              Стоимость инвентаря (Lis-Skins): {totalInventoryValueLisSkins}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
             </TotalValue>
             <ResetCacheButton
               onClick={resetCache}
@@ -676,7 +729,7 @@ const Dashboard = () => {
                 <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
                   <ItemImage src={item.icon_url} alt={item.name} />
                   <ItemName>{item.name}</ItemName>
-                  <ItemPrice>{convertPrice(item.price)}</ItemPrice>
+                  <ItemPrice>{convertPrice(item.steam_price)}</ItemPrice>
                 </InventoryCard>
               ))}
             </InventoryGrid>
@@ -692,10 +745,18 @@ const Dashboard = () => {
                 </ImageWrapper>
                 <PriceWrapper>
                   <PriceTable>
-                    <p>Steam: {convertPrice(selectedItem.price)}</p>
-                    <p>CS.Money: N/A</p>
-                    <p>Tradeit.gg: N/A</p>
-                    <p>Market.CSGO: N/A</p>
+                    <p>Steam: {convertPrice(selectedItem.steam_price)}</p>
+                    {selectedItem.appid === '730' ? (
+                      <>
+                        <p>Market.CSGO: {convertPrice(selectedItem.market_csgo_price)}</p>
+                        <p>Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Market.Dota2: {convertPrice(selectedItem.market_dota2_price)}</p>
+                        <p>Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}</p>
+                      </>
+                    )}
                   </PriceTable>
                 </PriceWrapper>
               </ItemInfoContainer>

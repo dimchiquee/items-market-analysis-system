@@ -44,18 +44,15 @@ session = requests.Session()
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 session.mount("https://", HTTPAdapter(max_retries=retries))
 
-
 def load_price_cache() -> Dict[str, Dict]:
     if PRICE_CACHE_PATH.exists():
         with open(PRICE_CACHE_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
-
 def save_price_cache(cache: Dict[str, Dict]):
     with open(PRICE_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
-
 
 def load_history_cache() -> Dict[str, List]:
     if HISTORY_CACHE_PATH.exists():
@@ -63,15 +60,12 @@ def load_history_cache() -> Dict[str, List]:
             return json.load(f)
     return {}
 
-
 def save_history_cache(cache: Dict[str, List]):
     with open(HISTORY_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False)
 
-
 price_cache = load_price_cache()
 history_cache = load_history_cache()
-
 
 def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
     schema_file = SCHEMA_CACHE_PATH / f"{appid}_schema.json"
@@ -99,10 +93,8 @@ def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
         logger.error(f"Failed to fetch schema for appid {appid}: {str(e)}")
         return []
 
-
 def normalize_market_hash_name(name: str) -> str:
     return re.sub(r'\s+', ' ', name.strip().lower())
-
 
 def build_properties_map(schema_data: List[Dict[str, Any]], appid: str) -> Dict[str, Dict[str, Any]]:
     properties_map = {}
@@ -174,7 +166,6 @@ def build_properties_map(schema_data: List[Dict[str, Any]], appid: str) -> Dict[
             properties["attributes"] = attributes
 
         elif appid == "570":
-            # Удаляем извлечение rarity, так как оно не работает
             properties["rarity"] = ""
 
             slot = item.get("slot", "")
@@ -204,7 +195,6 @@ def build_properties_map(schema_data: List[Dict[str, Any]], appid: str) -> Dict[
     logger.info(f"Properties map for appid {appid} built with {len(properties_map)} items")
     return properties_map
 
-
 cs2_properties_map = {}
 dota2_properties_map = {}
 
@@ -222,7 +212,6 @@ except Exception as e:
     logger.error(f"Failed to load schema for appid 570: {str(e)}. Proceeding without schema.")
     dota2_properties_map = {}
 
-
 @router.get("/steam/login")
 async def steam_login():
     params = {
@@ -235,7 +224,6 @@ async def steam_login():
     }
     auth_url = f"https://steamcommunity.com/openid/login?{urlencode(params)}"
     return RedirectResponse(auth_url)
-
 
 @router.get("/steam/callback")
 async def steam_callback(request: Request):
@@ -287,7 +275,6 @@ async def steam_callback(request: Request):
     logger.info(f"User authenticated: SteamID={steam_id}")
     return RedirectResponse(f"http://localhost:5173/callback?token={token}")
 
-
 @router.get("/verify")
 async def verify_token(token: str):
     try:
@@ -311,7 +298,6 @@ async def verify_token(token: str):
     except Exception as e:
         logger.error(f"Failed to fetch user info: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch user info")
-
 
 @router.get("/inventory")
 async def get_inventory(token: str, appid: str):
@@ -490,6 +476,73 @@ async def get_inventory(token: str, appid: str):
         logger.error(f"Failed to fetch inventory: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch inventory: {str(e)}")
 
+def fetch_market_csgo_prices():
+    try:
+        response = session.get("https://market.csgo.com/api/v2/prices/USD.json", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("success"):
+            raise HTTPException(status_code=500, detail="Ошибка получения цен с Market.CSGO")
+        return {item["market_hash_name"]: item["price"] for item in data["items"]}
+    except requests.RequestException as e:
+        logger.error(f"Ошибка запроса к Market.CSGO: {e}")
+        return {}
+
+def get_market_csgo_price(market_hash_name: str):
+    cache_key = "market_csgo_prices"
+    if cache_key in price_cache:
+        prices = price_cache[cache_key]
+    else:
+        prices = fetch_market_csgo_prices()
+        price_cache[cache_key] = prices
+        save_price_cache(price_cache)
+
+    return prices.get(market_hash_name, "N/A")
+
+def fetch_market_dota2_prices():
+    try:
+        response = session.get("https://market.dota2.net/api/v2/prices/USD.json", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("success"):
+            raise HTTPException(status_code=500, detail="Ошибка получения цен с Market.Dota2")
+        return {item["market_hash_name"]: item["price"] for item in data["items"]}
+    except requests.RequestException as e:
+        logger.error(f"Ошибка запроса к Market.Dota2: {e}")
+        return {}
+
+def get_market_dota2_price(market_hash_name: str):
+    cache_key = "market_dota2_prices"
+    if cache_key in price_cache:
+        prices = price_cache[cache_key]
+    else:
+        prices = fetch_market_dota2_prices()
+        price_cache[cache_key] = prices
+        save_price_cache(price_cache)
+
+    return prices.get(market_hash_name, "N/A")
+
+def fetch_lis_skins_prices(appid: str):
+    try:
+        url = "https://lis-skins.com/market_export_json/csgo.json" if appid == "730" else "https://lis-skins.com/market_export_json/dota2.json"
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return {item["name"]: item["price"] for item in data}
+    except requests.RequestException as e:
+        logger.error(f"Ошибка запроса к Lis-Skins для appid {appid}: {e}")
+        return {}
+
+def get_lis_skins_price(market_hash_name: str, appid: str):
+    cache_key = f"lis_skins_prices_{appid}"
+    if cache_key in price_cache:
+        prices = price_cache[cache_key]
+    else:
+        prices = fetch_lis_skins_prices(appid)
+        price_cache[cache_key] = prices
+        save_price_cache(price_cache)
+
+    return prices.get(market_hash_name, "N/A")
 
 @router.get("/price")
 async def get_price(token: str, market_hash_name: str, appid: str, force_refresh: bool = False):
@@ -510,19 +563,34 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
         logger.debug(f"Price response: {price_response.status_code} - {price_response.text}")
 
         price_data = price_response.json() if price_response.status_code == 200 else {}
-        price = price_data.get('lowest_price', 'N/A')
+        steam_price = price_data.get('lowest_price', 'N/A')
 
-        result = {"price": price}
+        lis_skins_price = get_lis_skins_price(market_hash_name, appid)
+
+        if appid == "730":
+            market_csgo_price = get_market_csgo_price(market_hash_name)
+            result = {
+                "steam_price": steam_price,
+                "market_csgo_price": market_csgo_price,
+                "lis_skins_price": f"${lis_skins_price}" if lis_skins_price != "N/A" else "N/A"
+            }
+        else:
+            market_dota2_price = get_market_dota2_price(market_hash_name)
+            result = {
+                "steam_price": steam_price,
+                "market_dota2_price": market_dota2_price,
+                "lis_skins_price": f"${lis_skins_price}" if lis_skins_price != "N/A" else "N/A"
+            }
+
         price_cache[cache_key] = result
         save_price_cache(price_cache)
-        logger.info(f"Price fetched: {price}")
+        logger.info(f"Price fetched: {result}")
         return result
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     except Exception as e:
         logger.error(f"Failed to fetch price: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch price: {str(e)}")
-
 
 @router.get("/reset_cache")
 async def reset_cache(token: str):
@@ -544,7 +612,6 @@ async def reset_cache(token: str):
     except Exception as e:
         logger.error(f"Failed to reset cache: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reset cache: {str(e)}")
-
 
 @router.get("/history")
 async def get_history(token: str, market_hash_name: str, appid: str):
@@ -568,7 +635,7 @@ async def get_history(token: str, market_hash_name: str, appid: str):
 
         if not history_data:
             logger.warning(f"No history data found for {market_hash_name}")
-            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
+            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
             price_response = session.get(price_url, timeout=10)
             price_data = price_response.json() if price_response.status_code == 200 else {}
             if price_data.get('lowest_price'):
