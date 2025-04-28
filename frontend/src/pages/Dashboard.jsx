@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
+import InventoryCard from '../components/InventoryCard';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 
@@ -26,34 +27,6 @@ const InventoryGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
-`;
-
-const InventoryCard = styled.div`
-  background-color: #fff;
-  padding: 1rem;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  text-align: center;
-  cursor: pointer;
-  &:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  }
-`;
-
-const ItemImage = styled.img`
-  width: 100%;
-  max-height: 150px;
-  object-fit: contain;
-`;
-
-const ItemName = styled.p`
-  margin: 0.5rem 0;
-  font-size: 1rem;
-`;
-
-const ItemPrice = styled.p`
-  margin: 0;
-  color: #666;
 `;
 
 const ModalOverlay = styled.div`
@@ -763,11 +736,12 @@ const Dashboard = () => {
             )}
             <InventoryGrid>
               {filteredInventory.map((item, index) => (
-                <InventoryCard key={`${item.classid}-${index}`} onClick={() => handleItemClick(item)}>
-                  <ItemImage src={item.icon_url} alt={item.name} />
-                  <ItemName>{item.name}</ItemName>
-                  <ItemPrice>{convertPrice(item.steam_price)}</ItemPrice>
-                </InventoryCard>
+                <InventoryCard
+                  key={`${item.classid}-${index}`}
+                  item={item}
+                  onClick={handleItemClick}
+                  convertPrice={convertPrice}
+                />
               ))}
             </InventoryGrid>
           </>
@@ -778,7 +752,7 @@ const Dashboard = () => {
               <h2>{selectedItem.name}</h2>
               <ItemInfoContainer>
                 <ImageWrapper>
-                  <ItemImage src={selectedItem.icon_url} alt={selectedItem.name} />
+                  <img src={selectedItem.icon_url} alt={selectedItem.name} style={{ width: '100%', maxHeight: '150px', objectFit: 'contain' }} />
                 </ImageWrapper>
                 <PriceWrapper>
                   <PriceTable>
