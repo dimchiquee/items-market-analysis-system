@@ -2,3 +2,4 @@
 .db
 backend/cache
 favorites.db
+backend/__pycache__/
