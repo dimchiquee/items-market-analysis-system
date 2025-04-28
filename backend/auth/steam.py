@@ -10,7 +10,6 @@ import logging
 import json
 import re
 from typing import Dict, List, Any
-from pathlib import Path
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -31,27 +30,15 @@ REDIRECT_URI = os.getenv("REDIRECT_URI")
 if not all([STEAM_API_KEY, JWT_SECRET_KEY, REDIRECT_URI]):
     raise ValueError("Missing required environment variables")
 
-CACHE_DIR = Path("cache")
-CACHE_DIR.mkdir(exist_ok=True)
-SCHEMA_CACHE_PATH = CACHE_DIR / "schemas"
-SCHEMA_CACHE_PATH.mkdir(exist_ok=True)
-PRICE_CACHE_PATH = CACHE_DIR / "prices.json"
-HISTORY_CACHE_PATH = CACHE_DIR / "history.json"
-POPULAR_ITEMS_CACHE_PATH = CACHE_DIR / "popular_items.json"
-
-price_cache: Dict[str, Dict] = {}
-history_cache: Dict[str, List] = {}
-popular_items_cache: Dict[str, List] = {}
-
-session = requests.Session()
-retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
-session.mount("https://", HTTPAdapter(max_retries=retries))
-
 DATABASE = "favorites.db"
+
+
 
 def init_db():
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
+
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS favorites (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,52 +51,149 @@ def init_db():
             UNIQUE(steam_id, appid, market_hash_name)
         )
     """)
+
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS price_cache (
+            cache_key TEXT PRIMARY KEY,
+            price_data TEXT NOT NULL
+        )
+    """)
+
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history_cache (
+            cache_key TEXT PRIMARY KEY,
+            history_data TEXT NOT NULL
+        )
+    """)
+
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS popular_items_cache (
+            cache_key TEXT PRIMARY KEY,
+            items_data TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_cache (
+            appid TEXT PRIMARY KEY,
+            schema_data TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_cache_key ON price_cache(cache_key)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_history_cache_key ON history_cache(cache_key)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_popular_items_cache_key ON popular_items_cache(cache_key)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_schema_cache_appid ON schema_cache(appid)")
+
     conn.commit()
     conn.close()
 
+
 init_db()
 
+price_cache: Dict[str, Dict] = {}
+history_cache: Dict[str, List] = {}
+popular_items_cache: Dict[str, List] = {}
+
+session = requests.Session()
+retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
+session.mount("https://", HTTPAdapter(max_retries=retries))
+
+
+
 def load_price_cache() -> Dict[str, Dict]:
-    if PRICE_CACHE_PATH.exists():
-        with open(PRICE_CACHE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT cache_key, price_data FROM price_cache")
+    rows = cursor.fetchall()
+    conn.close()
+
+    cache = {}
+    for row in rows:
+        cache[row[0]] = json.loads(row[1])
+    return cache
+
 
 def save_price_cache(cache: Dict[str, Dict]):
-    with open(PRICE_CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False)
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    for key, value in cache.items():
+        cursor.execute("""
+            INSERT OR REPLACE INTO price_cache (cache_key, price_data)
+            VALUES (?, ?)
+        """, (key, json.dumps(value)))
+    conn.commit()
+    conn.close()
+
 
 def load_history_cache() -> Dict[str, List]:
-    if HISTORY_CACHE_PATH.exists():
-        with open(HISTORY_CACHE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT cache_key, history_data FROM history_cache")
+    rows = cursor.fetchall()
+    conn.close()
+
+    cache = {}
+    for row in rows:
+        cache[row[0]] = json.loads(row[1])
+    return cache
+
 
 def save_history_cache(cache: Dict[str, List]):
-    with open(HISTORY_CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False)
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    for key, value in cache.items():
+        cursor.execute("""
+            INSERT OR REPLACE INTO history_cache (cache_key, history_data)
+            VALUES (?, ?)
+        """, (key, json.dumps(value)))
+    conn.commit()
+    conn.close()
+
 
 def load_popular_items_cache() -> Dict[str, List]:
-    if POPULAR_ITEMS_CACHE_PATH.exists():
-        with open(POPULAR_ITEMS_CACHE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT cache_key, items_data FROM popular_items_cache")
+    rows = cursor.fetchall()
+    conn.close()
+
+    cache = {}
+    for row in rows:
+        cache[row[0]] = json.loads(row[1])
+    return cache
+
 
 def save_popular_items_cache(cache: Dict[str, List]):
-    with open(POPULAR_ITEMS_CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False)
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    for key, value in cache.items():
+        cursor.execute("""
+            INSERT OR REPLACE INTO popular_items_cache (cache_key, items_data)
+            VALUES (?, ?)
+        """, (key, json.dumps(value)))
+    conn.commit()
+    conn.close()
+
 
 price_cache = load_price_cache()
 history_cache = load_history_cache()
 popular_items_cache = load_popular_items_cache()
 
-def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
-    schema_file = SCHEMA_CACHE_PATH / f"{appid}_schema.json"
 
-    if schema_file.exists():
-        logger.info(f"Loading cached schema for appid {appid}")
-        with open(schema_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT schema_data FROM schema_cache WHERE appid = ?", (appid,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        logger.info(f"Loading cached schema for appid {appid} from SQLite")
+        return json.loads(row[0])
 
     logger.info(f"Fetching schema for appid {appid} from Steam API")
     try:
@@ -120,17 +204,25 @@ def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
 
         schema_data = response.json().get("result", {}).get("items", [])
 
-        with open(schema_file, "w", encoding="utf-8") as f:
-            json.dump(schema_data, f, ensure_ascii=False)
-        logger.info(f"Schema for appid {appid} cached successfully")
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO schema_cache (appid, schema_data)
+            VALUES (?, ?)
+        """, (appid, json.dumps(schema_data)))
+        conn.commit()
+        conn.close()
 
+        logger.info(f"Schema for appid {appid} cached successfully in SQLite")
         return schema_data
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to fetch schema for appid {appid}: {str(e)}")
         return []
 
+
 def normalize_market_hash_name(name: str) -> str:
     return re.sub(r'\s+', ' ', name.strip().lower())
+
 
 def build_properties_map(schema_data: List[Dict[str, Any]], appid: str) -> Dict[str, Dict[str, Any]]:
     properties_map = {}
@@ -231,6 +323,7 @@ def build_properties_map(schema_data: List[Dict[str, Any]], appid: str) -> Dict[
     logger.info(f"Properties map for appid {appid} built with {len(properties_map)} items")
     return properties_map
 
+
 cs2_properties_map = {}
 dota2_properties_map = {}
 
@@ -248,6 +341,7 @@ except Exception as e:
     logger.error(f"Failed to load schema for appid 570: {str(e)}. Proceeding without schema.")
     dota2_properties_map = {}
 
+
 @router.get("/steam/login")
 async def steam_login():
     params = {
@@ -260,6 +354,7 @@ async def steam_login():
     }
     auth_url = f"https://steamcommunity.com/openid/login?{urlencode(params)}"
     return RedirectResponse(auth_url)
+
 
 @router.get("/steam/callback")
 async def steam_callback(request: Request):
@@ -311,6 +406,7 @@ async def steam_callback(request: Request):
     logger.info(f"User authenticated: SteamID={steam_id}")
     return RedirectResponse(f"http://localhost:5173/callback?token={token}")
 
+
 @router.get("/verify")
 async def verify_token(token: str):
     try:
@@ -334,6 +430,7 @@ async def verify_token(token: str):
     except Exception as e:
         logger.error(f"Failed to fetch user info: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch user info")
+
 
 @router.get("/inventory")
 async def get_inventory(token: str, appid: str):
@@ -468,7 +565,8 @@ async def get_inventory(token: str, appid: str):
                                         "arcana": "Arcana",
                                         "ancient": "Ancient"
                                     }
-                                    mapped_rarity = rarity_mapping.get(rarity_value, tag.get("localized_tag_name", "").title())
+                                    mapped_rarity = rarity_mapping.get(rarity_value,
+                                                                       tag.get("localized_tag_name", "").title())
                                     properties["rarity"] = mapped_rarity.title()
                             if not properties["hero"]:
                                 for desc_item in desc.get("descriptions", []):
@@ -488,7 +586,8 @@ async def get_inventory(token: str, appid: str):
                                     properties["slot"] = "Weapon"
                                 elif "shoulders" in name_lower:
                                     properties["slot"] = "Shoulders"
-                            logger.info(f"Dota 2 item: {market_hash_name}, Rarity: {properties['rarity']}, Hero: {properties['hero']}")
+                            logger.info(
+                                f"Dota 2 item: {market_hash_name}, Rarity: {properties['rarity']}, Hero: {properties['hero']}")
 
                         items.append({
                             "name": desc.get('name', 'Unknown Item'),
@@ -525,14 +624,21 @@ def fetch_market_csgo_prices():
         logger.error(f"Ошибка запроса к Market.CSGO: {e}")
         return {}
 
+
 def get_market_csgo_price(market_hash_name: str):
     cache_key = "market_csgo_prices"
-    if cache_key in price_cache:
-        prices = price_cache[cache_key]
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT price_data FROM price_cache WHERE cache_key = ?", (cache_key,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        prices = json.loads(row[0])
     else:
         prices = fetch_market_csgo_prices()
         price_cache[cache_key] = prices
-        save_price_cache(price_cache)
+        save_price_cache({cache_key: prices})
 
     return prices.get(market_hash_name, "N/A")
 
@@ -549,14 +655,21 @@ def fetch_market_dota2_prices():
         logger.error(f"Ошибка запроса к Market.Dota2: {e}")
         return {}
 
+
 def get_market_dota2_price(market_hash_name: str):
     cache_key = "market_dota2_prices"
-    if cache_key in price_cache:
-        prices = price_cache[cache_key]
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT price_data FROM price_cache WHERE cache_key = ?", (cache_key,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        prices = json.loads(row[0])
     else:
         prices = fetch_market_dota2_prices()
         price_cache[cache_key] = prices
-        save_price_cache(price_cache)
+        save_price_cache({cache_key: prices})
 
     return prices.get(market_hash_name, "N/A")
 
@@ -567,21 +680,29 @@ def fetch_lis_skins_prices(appid: str):
         response = session.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        return {item["name"]: item["가격"] for item in data}
+        return {item["name"]: item["price"] for item in data}
     except requests.RequestException as e:
         logger.error(f"Ошибка запроса к Lis-Skins для appid {appid}: {e}")
         return {}
 
+
 def get_lis_skins_price(market_hash_name: str, appid: str):
     cache_key = f"lis_skins_prices_{appid}"
-    if cache_key in price_cache:
-        prices = price_cache[cache_key]
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT price_data FROM price_cache WHERE cache_key = ?", (cache_key,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        prices = json.loads(row[0])
     else:
         prices = fetch_lis_skins_prices(appid)
         price_cache[cache_key] = prices
-        save_price_cache(price_cache)
+        save_price_cache({cache_key: prices})
 
     return prices.get(market_hash_name, "N/A")
+
 
 @router.get("/price")
 async def get_price(token: str, market_hash_name: str, appid: str, force_refresh: bool = False):
@@ -591,12 +712,18 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         cache_key = f"{appid}:{market_hash_name}"
-        if not force_refresh and cache_key in price_cache:
-            logger.debug(f"Returning cached price for {cache_key}")
-            return price_cache[cache_key]
+        if not force_refresh:
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT price_data FROM price_cache WHERE cache_key = ?", (cache_key,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                logger.debug(f"Returning cached price for {cache_key}")
+                return json.loads(row[0])
 
         logger.debug(f"Fetching price for {market_hash_name} (appid: {appid})")
-        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
+        price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
         price_response = session.get(price_url, timeout=10)
         logger.debug(f"Price URL: {price_url}")
         logger.debug(f"Price response: {price_response.status_code} - {price_response.text}")
@@ -622,7 +749,7 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
             }
 
         price_cache[cache_key] = result
-        save_price_cache(price_cache)
+        save_price_cache({cache_key: result})
         logger.info(f"Price fetched: {result}")
         return result
     except jwt.JWTError:
@@ -631,6 +758,7 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
         logger.error(f"Failed to fetch price: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch price: {str(e)}")
 
+
 @router.get("/reset_cache")
 async def reset_cache(token: str):
     try:
@@ -638,15 +766,17 @@ async def reset_cache(token: str):
         if not payload.get("steam_id"):
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM price_cache")
+        cursor.execute("DELETE FROM history_cache")
+        cursor.execute("DELETE FROM popular_items_cache")
+        conn.commit()
+        conn.close()
+
         price_cache.clear()
         history_cache.clear()
         popular_items_cache.clear()
-        if PRICE_CACHE_PATH.exists():
-            PRICE_CACHE_PATH.unlink()
-        if HISTORY_CACHE_PATH.exists():
-            HISTORY_CACHE_PATH.unlink()
-        if POPULAR_ITEMS_CACHE_PATH.exists():
-            POPULAR_ITEMS_CACHE_PATH.unlink()
         logger.info("Server price, history, and popular items cache cleared")
         return {"message": "Cache cleared"}
     except jwt.JWTError:
@@ -654,6 +784,7 @@ async def reset_cache(token: str):
     except Exception as e:
         logger.error(f"Failed to reset cache: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reset cache: {str(e)}")
+
 
 @router.get("/history")
 async def get_history(token: str, market_hash_name: str, appid: str):
@@ -663,9 +794,15 @@ async def get_history(token: str, market_hash_name: str, appid: str):
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         cache_key = f"{appid}:{market_hash_name}"
-        if cache_key in history_cache:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT history_data FROM history_cache WHERE cache_key = ?", (cache_key,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
             logger.debug(f"Returning cached history for {cache_key}")
-            return {"history": history_cache[cache_key]}
+            return {"history": json.loads(row[0])}
 
         logger.debug(f"Fetching history for {market_hash_name} (appid: {appid})")
         history_url = f"https://steamcommunity.com/market/listings/{appid}/{quote(market_hash_name)}"
@@ -677,7 +814,7 @@ async def get_history(token: str, market_hash_name: str, appid: str):
 
         if not history_data:
             logger.warning(f"No history data found for {market_hash_name}")
-            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}¤cy=1&market_hash_name={quote(market_hash_name)}"
+            price_url = f"https://steamcommunity.com/market/priceoverview/?appid={appid}&currency=1&market_hash_name={quote(market_hash_name)}"
             price_response = session.get(price_url, timeout=10)
             price_data = price_response.json() if price_response.status_code == 200 else {}
             if price_data.get('lowest_price'):
@@ -686,7 +823,7 @@ async def get_history(token: str, market_hash_name: str, appid: str):
                 history_data = [[current_time, price, "1"]]
 
         history_cache[cache_key] = history_data
-        save_history_cache(history_cache)
+        save_history_cache({cache_key: history_data})
         logger.info(f"History fetched: {len(history_data)} entries")
         return {"history": history_data}
     except jwt.JWTError:
@@ -694,6 +831,7 @@ async def get_history(token: str, market_hash_name: str, appid: str):
     except Exception as e:
         logger.error(f"Failed to fetch history: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
+
 
 @router.get("/popular_items")
 async def get_popular_items(appid: str, force_refresh: bool = False):
@@ -703,15 +841,24 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
             raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS2 or 570 for Dota 2")
 
         cache_key = f"popular_items_{appid}"
-        if force_refresh and cache_key in popular_items_cache:
-            logger.debug(f"Clearing cache for appid {appid} due to force_refresh")
-            del popular_items_cache[cache_key]
-            if POPULAR_ITEMS_CACHE_PATH.exists():
-                save_popular_items_cache(popular_items_cache)
+        if force_refresh:
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM popular_items_cache WHERE cache_key = ?", (cache_key,))
+            conn.commit()
+            conn.close()
+            if cache_key in popular_items_cache:
+                del popular_items_cache[cache_key]
 
-        if not force_refresh and cache_key in popular_items_cache:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT items_data FROM popular_items_cache WHERE cache_key = ?", (cache_key,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not force_refresh and row:
             logger.debug(f"Returning cached popular items for appid {appid}")
-            return {"items": popular_items_cache[cache_key]}
+            return {"items": json.loads(row[0])}
 
         logger.debug(f"Fetching popular items for appid {appid} from Steam Market")
         if force_refresh:
@@ -741,7 +888,8 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
                 "name": name,
                 "price": price,
                 "icon_url": icon_url,
-                "item_url": item_url
+                "item_url": item_url,
+                "appid": appid
             })
 
         if not items:
@@ -749,12 +897,13 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
             raise HTTPException(status_code=404, detail="No popular items found")
 
         popular_items_cache[cache_key] = items
-        save_popular_items_cache(popular_items_cache)
+        save_popular_items_cache({cache_key: items})
         logger.info(f"Popular items fetched for appid {appid}: {len(items)} items")
         return {"items": items}
     except Exception as e:
         logger.error(f"Failed to fetch popular items: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch popular items: {str(e)}")
+
 
 @router.get("/search_items")
 async def search_items(appid: str, query: str):
@@ -795,7 +944,8 @@ async def search_items(appid: str, query: str):
                 "name": name,
                 "price": price,
                 "icon_url": icon_url,
-                "item_url": item_url
+                "item_url": item_url,
+                "appid": appid
             })
 
         if not items:
@@ -806,10 +956,12 @@ async def search_items(appid: str, query: str):
         return {"items": items}
     except requests.exceptions.RequestException as e:
         logger.error(f"Network error while searching items: {str(e)}")
-        raise HTTPException(status_code=500, detail="Не удалось связаться с Steam Market. Проверьте интернет-соединение и попробуйте снова.")
+        raise HTTPException(status_code=500,
+                            detail="Не удалось связаться с Steam Market. Проверьте интернет-соединение и попробуйте снова.")
     except Exception as e:
         logger.error(f"Failed to search items: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Произошла ошибка при поиске: {str(e)}")
+
 
 @router.post("/favorites/add")
 async def add_to_favorites(token: str, item: Dict[str, Any]):
@@ -842,6 +994,7 @@ async def add_to_favorites(token: str, item: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Failed to add item to favorites: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to add item to favorites: {str(e)}")
+
 
 @router.get("/favorites")
 async def get_favorites(token: str):
@@ -877,6 +1030,7 @@ async def get_favorites(token: str):
     except Exception as e:
         logger.error(f"Failed to fetch favorites: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch favorites: {str(e)}")
+
 
 @router.delete("/favorites/remove")
 async def remove_from_favorites(token: str, appid: str, market_hash_name: str):
