@@ -133,7 +133,7 @@ const ButtonContainer = styled.div`
 `;
 
 const ModalButton = styled.button`
-  background-color: ${props => props.primary ? '#66c0f4' : '#d8000c'};
+  background-color: ${props => props.primary ? '#66c0f4' : props.warning ? '#ffa500' : '#d8000c'};
   color: #fff;
   border: none;
   padding: 0.5rem 1rem;
@@ -141,7 +141,7 @@ const ModalButton = styled.button`
   cursor: pointer;
   width: 100%;
   &:hover {
-    background-color: ${props => props.primary ? '#8ed1ff' : '#ff3333'};
+    background-color: ${props => props.primary ? '#8ed1ff' : props.warning ? '#ffcc00' : '#ff3333'};
   }
 `;
 
@@ -203,7 +203,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [favorites, setFavorites] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [itemHistory, setItemHistory] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -222,6 +221,8 @@ const Dashboard = () => {
   const [totalInventoryValueSteam, setTotalInventoryValueSteam] = useState(0);
   const [totalInventoryValueMarket, setTotalInventoryValueMarket] = useState(0);
   const [totalInventoryValueLisSkins, setTotalInventoryValueLisSkins] = useState(0);
+  const [isItemInFavorites, setIsItemInFavorites] = useState(false);
+  const [favoritesMessage, setFavoritesMessage] = useState('');
 
   const exchangeRate = {
     '$': 1,
@@ -247,14 +248,12 @@ const Dashboard = () => {
     let totalLisSkins = 0;
 
     filteredInventory.forEach(item => {
-      // Цена Steam
       if (item.steam_price && item.steam_price !== 'N/A' && item.steam_price !== 'Загрузка...') {
         const numericPrice = parseFloat(item.steam_price.replace('$', '')) || 0;
         const priceInSelectedCurrency = currency === '$' ? numericPrice : numericPrice * exchangeRate[currency];
         totalSteam += priceInSelectedCurrency;
       }
 
-      // Цена Market (Market.CSGO для CS2, Market.Dota2 для Dota 2)
       const marketPrice = item.appid === '730' ? item.market_csgo_price : item.market_dota2_price;
       if (marketPrice && marketPrice !== 'N/A' && marketPrice !== 'Загрузка...') {
         const numericMarketPrice = parseFloat(marketPrice.replace('$', '')) || 0;
@@ -262,7 +261,6 @@ const Dashboard = () => {
         totalMarket += marketPriceInSelectedCurrency;
       }
 
-      // Цена Lis-Skins
       if (item.lis_skins_price && item.lis_skins_price !== 'N/A' && item.lis_skins_price !== 'Загрузка...') {
         const numericLisSkinsPrice = parseFloat(item.lis_skins_price.replace('$', '')) || 0;
         const lisSkinsPriceInSelectedCurrency = currency === '$' ? numericLisSkinsPrice : numericLisSkinsPrice * exchangeRate[currency];
@@ -434,6 +432,46 @@ const Dashboard = () => {
       });
   };
 
+  const checkIfItemInFavorites = async (item) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get('http://localhost:8000/auth/favorites', { params: { token } });
+      const favorites = response.data.items;
+      const isInFavorites = favorites.some(fav =>
+        fav.appid === item.appid && fav.market_hash_name === item.market_hash_name
+      );
+      setIsItemInFavorites(isInFavorites);
+      return isInFavorites;
+    } catch (error) {
+      console.error('Failed to check favorites:', error);
+      setFavoritesMessage('Ошибка проверки избранного');
+      return false;
+    }
+  };
+
+  const addToFavorites = async (item) => {
+    const isAlreadyInFavorites = await checkIfItemInFavorites(item);
+    if (isAlreadyInFavorites) {
+      setFavoritesMessage('Этот предмет уже в избранном!');
+      setTimeout(() => setFavoritesMessage(''), 3000);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      await axios.post('http://localhost:8000/auth/favorites/add', item, {
+        params: { token }
+      });
+      setFavoritesMessage('Предмет добавлен в избранное!');
+      setIsItemInFavorites(true);
+      setTimeout(() => setFavoritesMessage(''), 3000);
+    } catch (error) {
+      console.error('Failed to add to favorites:', error);
+      setFavoritesMessage('Ошибка при добавлении в избранное');
+      setTimeout(() => setFavoritesMessage(''), 3000);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) {
@@ -463,8 +501,11 @@ const Dashboard = () => {
   useEffect(() => {
     if (selectedItem) {
       document.body.style.overflow = 'hidden';
+      checkIfItemInFavorites(selectedItem);
     } else {
       document.body.style.overflow = 'auto';
+      setFavoritesMessage('');
+      setIsItemInFavorites(false);
     }
     return () => {
       document.body.style.overflow = 'auto';
@@ -643,10 +684,6 @@ const Dashboard = () => {
     setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
   };
 
-  const addToFavorites = (item) => {
-    setFavorites(prev => [...prev, item]);
-  };
-
   const predictPrice = (item) => {
     console.log(`Predicting price for ${item.name}`);
   };
@@ -760,6 +797,11 @@ const Dashboard = () => {
                   </PriceTable>
                 </PriceWrapper>
               </ItemInfoContainer>
+              {favoritesMessage && (
+                <ErrorMessage style={{ backgroundColor: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#ccffcc' : '#ffcccc', color: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#008000' : '#d8000c' }}>
+                  {favoritesMessage}
+                </ErrorMessage>
+              )}
               <ChartButtonContainer>
                 <ChartContainer>
                   {chartData && (
@@ -779,8 +821,8 @@ const Dashboard = () => {
                   <ModalButton onClick={() => fetchHistory(selectedItem, localStorage.getItem('auth_token'))}>
                     {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
                   </ModalButton>
-                  <ModalButton primary onClick={() => addToFavorites(selectedItem)}>
-                    Добавить в избранное
+                  <ModalButton primary onClick={() => addToFavorites(selectedItem)} warning={isItemInFavorites}>
+                    {isItemInFavorites ? 'Уже в избранном' : 'Добавить в избранное'}
                   </ModalButton>
                   <ModalButton onClick={() => predictPrice(selectedItem)}>
                     Прогноз цены

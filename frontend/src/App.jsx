@@ -5,6 +5,7 @@ import Callback from './pages/Callback';
 import Dashboard from './pages/Dashboard';
 import PopularPage from './pages/PopularPage';
 import SearchPage from './pages/SearchPage';
+import FavoritesPage from './pages/FavoritesPage';
 import { useEffect, useState } from 'react';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/" />} />
         <Route path="/popular" element={<PopularPage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/favorites" element={isAuthenticated ? <FavoritesPage /> : <Navigate to="/" />} />
       </Routes>
     </Router>
   );

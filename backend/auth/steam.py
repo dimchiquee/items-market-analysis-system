@@ -15,6 +15,7 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from datetime import datetime
+import sqlite3
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -45,6 +46,28 @@ popular_items_cache: Dict[str, List] = {}
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
 session.mount("https://", HTTPAdapter(max_retries=retries))
+
+DATABASE = "favorites.db"
+
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            steam_id TEXT NOT NULL,
+            appid TEXT NOT NULL,
+            market_hash_name TEXT NOT NULL,
+            name TEXT NOT NULL,
+            icon_url TEXT NOT NULL,
+            properties TEXT,
+            UNIQUE(steam_id, appid, market_hash_name)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 def load_price_cache() -> Dict[str, Dict]:
     if PRICE_CACHE_PATH.exists():
@@ -544,7 +567,7 @@ def fetch_lis_skins_prices(appid: str):
         response = session.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        return {item["name"]: item["price"] for item in data}
+        return {item["name"]: item["가격"] for item in data}
     except requests.RequestException as e:
         logger.error(f"Ошибка запроса к Lis-Skins для appid {appid}: {e}")
         return {}
@@ -581,16 +604,13 @@ async def get_price(token: str, market_hash_name: str, appid: str, force_refresh
         price_data = price_response.json() if price_response.status_code == 200 else {}
         steam_price = price_data.get('lowest_price', 'N/A')
 
-
         lis_skins_price = get_lis_skins_price(market_hash_name, appid)
-
 
         if appid == "730":
             market_csgo_price = get_market_csgo_price(market_hash_name)
             result = {
                 "steam_price": steam_price,
                 "market_csgo_price": market_csgo_price,
-
                 "lis_skins_price": f"${lis_skins_price}" if lis_skins_price != "N/A" else "N/A"
             }
         else:
@@ -790,3 +810,94 @@ async def search_items(appid: str, query: str):
     except Exception as e:
         logger.error(f"Failed to search items: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Произошла ошибка при поиске: {str(e)}")
+
+@router.post("/favorites/add")
+async def add_to_favorites(token: str, item: Dict[str, Any]):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        steam_id = payload.get("steam_id")
+        if not steam_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR IGNORE INTO favorites (steam_id, appid, market_hash_name, name, icon_url, properties)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            steam_id,
+            item["appid"],
+            item["market_hash_name"],
+            item["name"],
+            item["icon_url"],
+            json.dumps(item.get("properties", {}))
+        ))
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Item {item['name']} added to favorites for SteamID: {steam_id}")
+        return {"message": "Item added to favorites"}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to add item to favorites: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add item to favorites: {str(e)}")
+
+@router.get("/favorites")
+async def get_favorites(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        steam_id = payload.get("steam_id")
+        if not steam_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM favorites WHERE steam_id = ?", (steam_id,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        items = []
+        for row in rows:
+            item = {
+                "id": row[0],
+                "steam_id": row[1],
+                "appid": row[2],
+                "market_hash_name": row[3],
+                "name": row[4],
+                "icon_url": row[5],
+                "properties": json.loads(row[6]) if row[6] else {}
+            }
+            items.append(item)
+
+        logger.info(f"Returning {len(items)} favorite items for SteamID: {steam_id}")
+        return {"items": items}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to fetch favorites: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch favorites: {str(e)}")
+
+@router.delete("/favorites/remove")
+async def remove_from_favorites(token: str, appid: str, market_hash_name: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        steam_id = payload.get("steam_id")
+        if not steam_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM favorites WHERE steam_id = ? AND appid = ? AND market_hash_name = ?
+        """, (steam_id, appid, market_hash_name))
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Item {market_hash_name} removed from favorites for SteamID: {steam_id}")
+        return {"message": "Item removed from favorites"}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to remove item from favorites: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove item from favorites: {str(e)}")

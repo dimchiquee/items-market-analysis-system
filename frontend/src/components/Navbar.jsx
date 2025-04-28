@@ -85,7 +85,7 @@ const Navbar = ({ user, currency, setCurrency }) => {
     <NavbarContainer>
       <NavLinks>
         <NavLink href="/dashboard">Главная</NavLink>
-        <NavLink href="#">Избранное</NavLink>
+        <NavLink href="/favorites">Избранное</NavLink>
         <NavLink href="/popular">Популярное</NavLink>
         <NavLink href="/search">Поиск</NavLink>
       </NavLinks>
