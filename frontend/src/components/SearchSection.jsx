@@ -65,7 +65,7 @@ const SearchGrid = styled.div`
   gap: 1rem;
 `;
 
-const SearchCard = styled.a`
+const SearchCard = styled.div`
   background-color: #fff;
   padding: 1rem;
   border-radius: 4px;
@@ -76,6 +76,11 @@ const SearchCard = styled.a`
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }
+`;
+
+const ItemLink = styled.a`
+  text-decoration: none;
+  color: inherit;
 `;
 
 const ItemImage = styled.img`
@@ -92,6 +97,32 @@ const ItemName = styled.p`
 const ItemPrice = styled.p`
   margin: 0;
   color: #666;
+`;
+
+const AddToFavoritesButton = styled.button`
+  background-color: #66c0f4;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  &:hover {
+    background-color: #8ed1ff;
+  }
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
+const Message = styled.div`
+  padding: 0.5rem;
+  background-color: ${props => props.success ? '#ccffcc' : '#ffcccc'};
+  border-radius: 4px;
+  color: ${props => props.success ? '#008000' : '#d8000c'};
+  text-align: center;
+  margin-top: 0.5rem;
 `;
 
 const ErrorMessage = styled.div`
@@ -115,6 +146,7 @@ const SearchSection = ({ currency }) => {
   const [searchItems, setSearchItems] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [favoritesMessage, setFavoritesMessage] = useState({});
 
   const exchangeRate = {
     '$': 1,
@@ -148,7 +180,12 @@ const SearchSection = ({ currency }) => {
       const response = await axios.get('http://localhost:8000/auth/search_items', {
         params: { appid, query: searchQuery }
       });
-      setSearchItems(response.data.items || []);
+      console.log('Search items response:', response.data.items);
+      const itemsWithAppid = response.data.items.map(item => ({
+        ...item,
+        appid: appid
+      }));
+      setSearchItems(itemsWithAppid || []);
       setSubmittedQuery(searchQuery);
     } catch (error) {
       console.error('Failed to fetch search items:', error);
@@ -157,6 +194,76 @@ const SearchSection = ({ currency }) => {
       setSubmittedQuery(searchQuery);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkIfItemInFavorites = async (item) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get('http://localhost:8000/auth/favorites', { params: { token } });
+      const favorites = response.data.items;
+      const itemKey = item.market_hash_name || item.name;
+      return favorites.some(fav =>
+        fav.appid === item.appid && fav.market_hash_name === itemKey
+      );
+    } catch (error) {
+      console.error('Failed to check favorites:', error);
+      return false;
+    }
+  };
+
+  const addToFavorites = async (item) => {
+    console.log('Adding to favorites:', item);
+    if (!item.appid) {
+      setFavoritesMessage(prev => ({
+        ...prev,
+        [item.name]: { text: 'Ошибка: отсутствует appid', success: false }
+      }));
+      setTimeout(() => {
+        setFavoritesMessage(prev => ({ ...prev, [item.name]: null }));
+      }, 3000);
+      return;
+    }
+
+    const itemKey = item.market_hash_name || item.name;
+
+    const isAlreadyInFavorites = await checkIfItemInFavorites(item);
+    if (isAlreadyInFavorites) {
+      setFavoritesMessage(prev => ({
+        ...prev,
+        [itemKey]: { text: 'Этот предмет уже в избранном!', success: false }
+      }));
+      setTimeout(() => {
+        setFavoritesMessage(prev => ({ ...prev, [itemKey]: null }));
+      }, 3000);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const itemToAdd = {
+        ...item,
+        market_hash_name: itemKey
+      };
+      await axios.post('http://localhost:8000/auth/favorites/add', itemToAdd, {
+        params: { token }
+      });
+      setFavoritesMessage(prev => ({
+        ...prev,
+        [itemKey]: { text: 'Предмет добавлен в избранное!', success: true }
+      }));
+      setTimeout(() => {
+        setFavoritesMessage(prev => ({ ...prev, [itemKey]: null }));
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to add to favorites:', error);
+      setFavoritesMessage(prev => ({
+        ...prev,
+        [itemKey]: { text: 'Ошибка при добавлении в избранное', success: false }
+      }));
+      setTimeout(() => {
+        setFavoritesMessage(prev => ({ ...prev, [itemKey]: null }));
+      }, 3000);
     }
   };
 
@@ -204,18 +311,30 @@ const SearchSection = ({ currency }) => {
         <NoResultsMessage>Ничего не найдено. Попробуйте изменить запрос.</NoResultsMessage>
       ) : (
         <SearchGrid>
-          {searchItems.map((item, index) => (
-            <SearchCard
-              key={`${item.name}-${index}`}
-              href={item.item_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ItemImage src={item.icon_url} alt={item.name} />
-              <ItemName>{item.name}</ItemName>
-              <ItemPrice>{convertPrice(item.price)}</ItemPrice>
-            </SearchCard>
-          ))}
+          {searchItems.map((item, index) => {
+            const itemKey = item.market_hash_name || item.name;
+            return (
+              <SearchCard key={`${item.name}-${index}`}>
+                <ItemLink
+                  href={item.item_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ItemImage src={item.icon_url} alt={item.name} />
+                  <ItemName>{item.name}</ItemName>
+                  <ItemPrice>{convertPrice(item.price)}</ItemPrice>
+                </ItemLink>
+                <AddToFavoritesButton onClick={() => addToFavorites(item)}>
+                  Добавить в избранное
+                </AddToFavoritesButton>
+                {favoritesMessage[itemKey] && (
+                  <Message success={favoritesMessage[itemKey].success}>
+                    {favoritesMessage[itemKey].text}
+                  </Message>
+                )}
+              </SearchCard>
+            );
+          })}
         </SearchGrid>
       )}
     </SearchSectionContainer>

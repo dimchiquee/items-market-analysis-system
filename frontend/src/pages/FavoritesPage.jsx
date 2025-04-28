@@ -445,7 +445,6 @@ const FavoritesPage = () => {
               <FavoriteCard key={`${item.appid}-${item.market_hash_name}-${index}`} onClick={() => handleItemClick(item)}>
                 <ItemImage src={item.icon_url} alt={item.name} />
                 <ItemName>{item.name}</ItemName>
-                <ItemPrice>{item.price ? convertPrice(item.price) : 'N/A'}</ItemPrice>
                 <RemoveButton onClick={(e) => { e.stopPropagation(); removeFromFavorites(item); }}>
                   Удалить
                 </RemoveButton>
