@@ -13,8 +13,13 @@ from typing import Dict, List, Any
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
+import pandas as pd
+import numpy as np
+import joblib
+
+
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -26,18 +31,27 @@ router = APIRouter()
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 REDIRECT_URI = os.getenv("REDIRECT_URI")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model_path_CS2 = os.path.join(BASE_DIR, "xgboost_model_730.joblib")
+model_path_DOTA2 = os.path.join(BASE_DIR, "xgboost_model_570.joblib")
 
 if not all([STEAM_API_KEY, JWT_SECRET_KEY, REDIRECT_URI]):
     raise ValueError("Missing required environment variables")
 
 DATABASE = "favorites.db"
 
+try:
+    MODEL_CS2 = joblib.load(model_path_CS2)
+    MODEL_DOTA2 = joblib.load(model_path_DOTA2)
+except FileNotFoundError as e:
+    logger.error(f"Model file not found: {e}")
+    raise ValueError(
+        "XGBoost models must be trained and saved as xgboost_model_730.joblib and xgboost_model_570.joblib")
 
 
 def init_db():
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS favorites (
@@ -52,7 +66,6 @@ def init_db():
         )
     """)
 
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS price_cache (
             cache_key TEXT PRIMARY KEY,
@@ -60,14 +73,12 @@ def init_db():
         )
     """)
 
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS history_cache (
             cache_key TEXT PRIMARY KEY,
             history_data TEXT NOT NULL
         )
     """)
-
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS popular_items_cache (
@@ -103,6 +114,20 @@ retries = Retry(total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503,
 session.mount("https://", HTTPAdapter(max_retries=retries))
 
 
+
+
+def convert_numpy_types(obj: Any) -> Any:
+    if isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
 
 def load_price_cache() -> Dict[str, Dict]:
     conn = sqlite3.connect(DATABASE)
@@ -1055,3 +1080,134 @@ async def remove_from_favorites(token: str, appid: str, market_hash_name: str):
     except Exception as e:
         logger.error(f"Failed to remove item from favorites: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to remove item from favorites: {str(e)}")
+
+
+def prepare_prediction_data(history_data: List[List]) -> pd.DataFrame:
+    if not history_data or len(history_data) < 50:
+        logger.error(f"Insufficient history data: {len(history_data)} entries")
+        return None
+
+    df = pd.DataFrame(history_data, columns=["timestamp", "price", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], format="%b %d %Y %H: +0")
+    df["price"] = df["price"].astype(float)
+    df["volume"] = df["volume"].str.replace(",", "").astype(int)
+
+    df["date"] = df["timestamp"].dt.date
+    df_daily = df.groupby("date").agg({
+        "timestamp": "last",
+        "price": "last",
+        "volume": "sum"
+    }).reset_index()
+
+    df_daily.set_index("timestamp", inplace=True)
+
+    df_daily = df_daily.asfreq("D", method="ffill").reset_index()
+
+    df_daily["pct_change_1d"] = df_daily["price"].pct_change(periods=1) * 100
+    df_daily["pct_change_7d"] = df_daily["price"].pct_change(periods=7) * 100
+
+    df_daily["day_of_week"] = df_daily["timestamp"].dt.dayofweek
+    df_daily["hour"] = df_daily["timestamp"].dt.hour
+
+    df_daily["event"] = 0
+
+    df_daily = df_daily.dropna()
+
+    if len(df_daily) < 10:
+        logger.error(f"Too few data points after processing: {len(df_daily)} entries")
+        return None
+
+    return df_daily
+
+def predict_price(model, data: pd.DataFrame, horizon: int) -> Dict:
+    features = ["pct_change_1d", "pct_change_7d", "day_of_week", "hour", "event", "volume"]
+
+    last_row = data.tail(1).copy()
+    last_price = last_row["price"].iloc[0]
+    last_date = last_row["timestamp"].iloc[0]
+
+    predictions = []
+    current_features = last_row[features].copy()
+
+    for day in range(1, horizon + 1):
+        X = current_features[features].values
+        predicted_pct_change = model.predict(X)[0]
+
+        new_price = last_price * (1 + predicted_pct_change / 100)
+
+        new_date = last_date + timedelta(days=day)
+
+        predictions.append({
+            "date": new_date.strftime("%Y-%m-%d"),
+            "predicted_price": round(new_price, 2),
+            "predicted_pct_change": round(predicted_pct_change, 3)
+        })
+
+        current_features["pct_change_1d"] = predicted_pct_change
+        current_features["pct_change_7d"] = (
+            (new_price - data["price"].iloc[-7]) / data["price"].iloc[-7] * 100
+            if len(data) >= 7 else predicted_pct_change
+        )
+        current_features["day_of_week"] = new_date.dayofweek
+        current_features["hour"] = new_date.hour
+        current_features["event"] = 0
+        current_features["volume"] = last_row["volume"].iloc[0]
+
+        last_price = new_price
+
+    return {
+        "last_known_price": round(last_row["price"].iloc[0], 2),
+        "last_known_date": last_row["timestamp"].iloc[0].strftime("%Y-%m-%d"),
+        "predictions": predictions
+    }
+
+@router.get("/predict_price")
+async def predict_price_endpoint(token: str, market_hash_name: str, appid: str, horizon: int):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        if not payload.get("steam_id"):
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        valid_appids = ["730", "570"]
+        if appid not in valid_appids:
+            raise HTTPException(status_code=400, detail="Invalid appid. Use 730 for CS2 or 570 for Dota 2")
+
+        max_horizon = 14
+        if horizon <= 0 or horizon > max_horizon:
+            raise HTTPException(status_code=400, detail=f"Horizon must be between 1 and {max_horizon} days")
+
+        model = MODEL_CS2 if appid == "730" else MODEL_DOTA2
+
+        cache_key = f"{appid}:{market_hash_name}"
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT history_data FROM history_cache WHERE cache_key = ?", (cache_key,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404,
+                                detail="No historical data found for this item. Please fetch history first.")
+
+        history_data = json.loads(row[0])
+        if len(history_data) < 10:
+            raise HTTPException(status_code=400,
+                                detail=f"Insufficient historical data: only {len(history_data)} entries available")
+
+        data = prepare_prediction_data(history_data)
+        if data is None:
+            raise HTTPException(status_code=400,
+                                detail="Failed to prepare data for prediction: insufficient data after processing")
+
+        result = predict_price(model, data, horizon)
+
+        result = convert_numpy_types(result)
+
+        logger.info(f"Price prediction successful for {market_hash_name} (appid {appid})")
+        return result
+
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to predict price: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to predict price: {str(e)}")
