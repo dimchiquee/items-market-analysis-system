@@ -1,5 +1,9 @@
 .env
 .db
-backend/cache
+.joblib
+forecast/
 favorites.db
+zv.db
+xgboost_model_570.joblib
+xgboost_model_730.joblib
 backend/__pycache__/
