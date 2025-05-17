@@ -191,6 +191,18 @@ const ResetCacheButton = styled.button`
   }
 `;
 
+const UpdateInfoContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const UpdateTimestamp = styled.span`
+  font-size: 0.9rem;
+  color: #555;
+`;
+
 const ProgressText = styled.p`
   margin: 0.5rem 0;
   color: #333;
@@ -245,6 +257,8 @@ const Dashboard = () => {
   const [totalInventoryValueLisSkins, setTotalInventoryValueLisSkins] = useState(0);
   const [isItemInFavorites, setIsItemInFavorites] = useState(false);
   const [favoritesMessage, setFavoritesMessage] = useState('');
+  const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
+  const [resetSorting, setResetSorting] = useState(false);
 
   const exchangeRate = {
     '$': 1,
@@ -383,6 +397,7 @@ const Dashboard = () => {
     }
 
     setPriceLoading(false);
+    setLastPriceUpdate(new Date());
     setFilteredInventory(applyFilters(updatedInventory));
   };
 
@@ -602,6 +617,12 @@ const Dashboard = () => {
     }
   }, [filters, inventory]);
 
+  useEffect(() => {
+    if (resetSorting) {
+      setResetSorting(false);
+    }
+  }, [resetSorting]);
+
   const handleChartWheel = (event) => {
     const chart = chartRef.current;
     if (!chart || !itemHistory) return;
@@ -737,6 +758,7 @@ const Dashboard = () => {
     });
     const resetFiltered = applyFilters(originalInventory);
     setFilteredInventory([...resetFiltered]);
+    setResetSorting(true);
   };
 
   const handleItemClick = (item) => {
@@ -801,6 +823,7 @@ const Dashboard = () => {
         cs2Filters={filters.cs2}
         dota2Filters={filters.dota2}
         onResetFilters={handleResetFilters}
+        resetSorting={resetSorting}
       />
       <MainContent>
         <h1>Ваш инвентарь</h1>
@@ -819,12 +842,19 @@ const Dashboard = () => {
               <br />
               Стоимость инвентаря (Lis-Skins): {totalInventoryValueLisSkins}{currency === '¥JPY' || currency === '¥CNY' ? currency : currency}
             </TotalValue>
-            <ResetCacheButton
-              onClick={resetCache}
-              disabled={priceLoading || inventory.length === 0}
-            >
-              {priceLoading ? 'Сброс кэша...' : 'Сбросить кэш'}
-            </ResetCacheButton>
+            <UpdateInfoContainer>
+              <ResetCacheButton
+                onClick={resetCache}
+                disabled={priceLoading || inventory.length === 0}
+              >
+                {priceLoading ? 'Обновление...' : 'Обновить цены'}
+              </ResetCacheButton>
+              {lastPriceUpdate && (
+                <UpdateTimestamp>
+                  Последнее обновление: {new Date(lastPriceUpdate).toLocaleString()}
+                </UpdateTimestamp>
+              )}
+            </UpdateInfoContainer>
             {priceLoading && (
               <ProgressText>Загружено: {loadedCount}/{totalCount}</ProgressText>
             )}

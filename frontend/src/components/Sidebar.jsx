@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 
 const SidebarContainer = styled.div`
@@ -76,9 +76,9 @@ const ResetButton = styled.button`
 `;
 
 const Sidebar = ({ onSort, onFilter, game, cs2Filters, dota2Filters, onResetFilters }) => {
-const cs2Types = ["", "Pistol", "Rifle", "SMG", "Sniper Rifle", "Shotgun", "Machine Gun", "Knife", "Gloves"];
-const cs2Rarities = ["", "Consumer Grade", "Industrial Grade", "Mil-Spec", "Restricted", "Classified", "Covert"];
-const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
+  const cs2Types = ["", "Pistol", "Rifle", "SMG", "Sniper Rifle", "Shotgun", "Machine Gun", "Knife", "Gloves"];
+  const cs2Rarities = ["", "Consumer Grade", "Industrial Grade", "Mil-Spec", "Restricted", "Classified", "Covert"];
+  const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
 
   const dota2Rarities = ["", "Common", "Uncommon", "Rare", "Mythical", "Legendary", "Immortal", "Arcana", "Ancient"];
   const dota2Heroes = [
@@ -100,6 +100,21 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
     "Void Spirit", "Warlock", "Weaver", "Windranger", "Winter Wyvern", "Witch Doctor", "Wraith King", "Zeus"
   ];
 
+  const [sortType, setSortType] = useState('');
+
+  useEffect(() => {
+    onSort(sortType);
+  }, [sortType, onSort]);
+
+  const handleSortChange = (value) => {
+    setSortType(value);
+  };
+
+  const handleResetFilters = () => {
+    onResetFilters();
+    setSortType('');
+  };
+
   return (
     <SidebarContainer>
       <FiltersContainer>
@@ -116,7 +131,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
           <>
             <FilterSection>
               <FilterTitle>Сортировка</FilterTitle>
-              <Select onChange={(e) => onSort(e.target.value)}>
+              <Select onChange={(e) => handleSortChange(e.target.value)} value={sortType}>
                 <option value="">Без сортировки</option>
                 <option value="price_asc">По цене (возрастание)</option>
                 <option value="price_desc">По цене (убывание)</option>
@@ -129,7 +144,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <FilterTitle>Тип</FilterTitle>
                   <Select
                     onChange={(e) => onFilter('type', e.target.value)}
-                    value={cs2Filters.type} // Привязываем к текущему значению
+                    value={cs2Filters.type}
                   >
                     {cs2Types.map(type => (
                       <option key={type} value={type}>{type || 'Все'}</option>
@@ -140,7 +155,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <FilterTitle>Редкость</FilterTitle>
                   <Select
                     onChange={(e) => onFilter('rarity', e.target.value)}
-                    value={cs2Filters.rarity} // Привязываем к текущему значению
+                    value={cs2Filters.rarity}
                   >
                     {cs2Rarities.map(rarity => (
                       <option key={rarity} value={rarity}>{rarity || 'Все'}</option>
@@ -151,7 +166,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <FilterTitle>Качество</FilterTitle>
                   <Select
                     onChange={(e) => onFilter('wear', e.target.value)}
-                    value={cs2Filters.wear} // Привязываем к текущему значению
+                    value={cs2Filters.wear}
                   >
                     {cs2Wears.map(wear => (
                       <option key={wear} value={wear}>{wear || 'Все'}</option>
@@ -163,7 +178,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <CheckboxLabel>
                     <Checkbox
                       type="checkbox"
-                      checked={cs2Filters.stattrak} // Привязываем к текущему значению
+                      checked={cs2Filters.stattrak}
                       onChange={(e) => onFilter('stattrak', e.target.checked)}
                     />
                     Только StatTrak
@@ -178,7 +193,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <FilterTitle>Герой</FilterTitle>
                   <Select
                     onChange={(e) => onFilter('hero', e.target.value)}
-                    value={dota2Filters.hero} // Привязываем к текущему значению
+                    value={dota2Filters.hero}
                   >
                     {dota2Heroes.map(hero => (
                       <option key={hero} value={hero}>{hero || 'Все'}</option>
@@ -189,7 +204,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
                   <FilterTitle>Редкость</FilterTitle>
                   <Select
                     onChange={(e) => onFilter('rarity', e.target.value)}
-                    value={dota2Filters.rarity} // Привязываем к текущему значению
+                    value={dota2Filters.rarity}
                   >
                     {dota2Rarities.map(rarity => (
                       <option key={rarity} value={rarity}>{rarity || 'Все'}</option>
@@ -204,7 +219,7 @@ const cs2Wears = ["", "Factory New", "Minimal Wear", "Field-Tested", "Well-Worn"
 
       {game && (
         <ResetButtonContainer>
-          <ResetButton onClick={onResetFilters}>
+          <ResetButton onClick={handleResetFilters}>
             Сбросить фильтр
           </ResetButton>
         </ResetButtonContainer>
