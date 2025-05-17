@@ -777,6 +777,12 @@ const Dashboard = () => {
     setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
   };
 
+  const closePredictionModal = () => {
+    setPredictItem(null);
+    setPrediction(null);
+    setPredictionError(null);
+  };
+
   const chartData = itemHistory ? {
     labels: itemHistory.map(data => {
       const [day, month, year] = data[0].split(' ');
@@ -935,7 +941,7 @@ const Dashboard = () => {
           </ModalOverlay>
         )}
         {predictItem && (
-          <ModalOverlay onClick={closeModal}>
+          <ModalOverlay onClick={closePredictionModal}>
             <PredictModalContent onClick={(e) => e.stopPropagation()}>
               <h2>Прогноз цены для {predictItem.name}</h2>
               <div>
@@ -958,7 +964,7 @@ const Dashboard = () => {
                 >
                   {predictionLoading ? 'Прогнозирование...' : 'Прогнозировать'}
                 </ModalButton>
-                <ModalButton onClick={closeModal}>
+                <ModalButton onClick={closePredictionModal}>
                   Закрыть
                 </ModalButton>
               </div>
