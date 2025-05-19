@@ -97,6 +97,20 @@ const ModalContent = styled.div`
   gap: 1.5rem;
 `;
 
+const PredictModalContent = styled.div`
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
 const ItemInfoContainer = styled.div`
   display: flex;
   gap: 1rem;
@@ -158,6 +172,32 @@ const ModalButton = styled.button`
   }
 `;
 
+const HorizonInput = styled.input`
+  margin-left: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 60px;
+`;
+
+const PredictionResult = styled.div`
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  text-align: left;
+`;
+
+const PredictionList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0;
+`;
+
+const PredictionItem = styled.li`
+  margin: 0.5rem 0;
+`;
+
 const ErrorMessage = styled.div`
   padding: 1rem;
   background-color: #ffcccc;
@@ -171,6 +211,11 @@ const FavoritesPage = () => {
   const [currency, setCurrency] = useState('$');
   const [favorites, setFavorites] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [predictItem, setPredictItem] = useState(null);
+  const [horizon, setHorizon] = useState(1);
+  const [prediction, setPrediction] = useState(null);
+  const [predictionError, setPredictionError] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [itemHistory, setItemHistory] = useState(null);
   const chartRef = useRef(null);
@@ -191,13 +236,13 @@ const FavoritesPage = () => {
     '¥CNY': 7.10
   };
 
-  const convertPrice = (price) => {
+  const convertPrice = (price, fromCurrency = '$') => {
     if (!price || price === 'N/A' || price === 'Загрузка...') return price;
     const numericPrice = parseFloat(price.replace('$', '')) || 0;
-    if (currency === '$') return `${numericPrice.toFixed(2)}${currency}`;
+    if (fromCurrency === currency) return `${numericPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
 
-    const priceInUSD = numericPrice;
-    const convertedPrice = priceInUSD * exchangeRate[currency];
+    const priceInUSD = fromCurrency === '$' ? numericPrice : numericPrice / exchangeRate[fromCurrency];
+    const convertedPrice = currency === '$' ? priceInUSD : priceInUSD * exchangeRate[currency];
     return `${convertedPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
   };
 
@@ -264,7 +309,10 @@ const FavoritesPage = () => {
 
   const handleItemClick = async (item) => {
     setSelectedItem(item);
+    setPredictItem(null);
     setItemHistory(null);
+    setPrediction(null);
+    setPredictionError(null);
     setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
 
     try {
@@ -287,12 +335,64 @@ const FavoritesPage = () => {
 
   const closeModal = () => {
     setSelectedItem(null);
+    setPredictItem(null);
     setItemHistory(null);
+    setPrediction(null);
+    setPredictionError(null);
     setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
   };
 
+  const closePredictionModal = () => {
+    setPredictItem(null);
+    setPrediction(null);
+    setPredictionError(null);
+  };
+
+  const predictPrice = async (item) => {
+    setPredictItem(item);
+    setPrediction(null);
+    setPredictionError(null);
+    setHorizon(1);
+  };
+
+  const fetchPrediction = async () => {
+    if (!predictItem) return;
+
+    setPredictionLoading(true);
+    setPredictionError(null);
+    setPrediction(null);
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/predict_price`, {
+        params: {
+          token,
+          market_hash_name: predictItem.market_hash_name,
+          appid: predictItem.appid,
+          horizon,
+        },
+      });
+
+      const convertedPrediction = {
+        ...response.data,
+        last_known_price: convertPrice(`$${response.data.last_known_price}`),
+        predictions: response.data.predictions.map(pred => ({
+          ...pred,
+          predicted_price: convertPrice(`$${pred.predicted_price}`),
+        })),
+      };
+
+      setPrediction(convertedPrediction);
+    } catch (error) {
+      console.error(`Failed to fetch prediction for ${predictItem.name}:`, error.response ? error.response.data : error.message);
+      setPredictionError(error.response?.data?.detail || 'Не удалось получить прогноз цены');
+    } finally {
+      setPredictionLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (selectedItem) {
+    if (selectedItem || predictItem) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';
@@ -300,7 +400,7 @@ const FavoritesPage = () => {
     return () => {
       document.body.style.overflow = 'auto';
     };
-  }, [selectedItem]);
+  }, [selectedItem, predictItem]);
 
   const handleChartWheel = (event) => {
     const chart = chartRef.current;
@@ -496,12 +596,64 @@ const FavoritesPage = () => {
                   <ModalButton onClick={() => fetchHistory(selectedItem)}>
                     {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
                   </ModalButton>
+                  <ModalButton onClick={() => predictPrice(selectedItem)}>
+                    Прогноз цены
+                  </ModalButton>
                   <ModalButton onClick={closeModal}>
                     Закрыть
                   </ModalButton>
                 </ButtonContainer>
               </ChartButtonContainer>
             </ModalContent>
+          </ModalOverlay>
+        )}
+        {predictItem && (
+          <ModalOverlay onClick={closePredictionModal}>
+            <PredictModalContent onClick={(e) => e.stopPropagation()}>
+              <h2>Прогноз цены для {predictItem.name}</h2>
+              <div>
+                <label>
+                  Горизонт прогнозирования (дни):
+                  <HorizonInput
+                    type="number"
+                    min="1"
+                    max="14"
+                    value={horizon}
+                    onChange={(e) => setHorizon(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <ModalButton
+                  primary
+                  onClick={fetchPrediction}
+                  disabled={predictionLoading || horizon < 1 || horizon > 14}
+                >
+                  {predictionLoading ? 'Прогнозирование...' : 'Прогнозировать'}
+                </ModalButton>
+                <ModalButton onClick={closePredictionModal}>
+                  Закрыть
+                </ModalButton>
+              </div>
+              {predictionError && (
+                <ErrorMessage>{predictionError}</ErrorMessage>
+              )}
+              {prediction && (
+                <PredictionResult>
+                  <h3>Результат прогноза</h3>
+                  <p>Последняя известная цена на {prediction.last_known_date}: {prediction.last_known_price}</p>
+                  <h4>Прогноз:</h4>
+                  <PredictionList>
+                    {prediction.predictions.map((pred, index) => (
+                      <PredictionItem key={index}>
+                        {pred.date}: {pred.predicted_price} (
+                        {pred.predicted_pct_change > 0 ? '+' : ''}{pred.predicted_pct_change.toFixed(3)}%)
+                      </PredictionItem>
+                    ))}
+                  </PredictionList>
+                </PredictionResult>
+              )}
+            </PredictModalContent>
           </ModalOverlay>
         )}
       </MainContent>
