@@ -18,7 +18,7 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import joblib
-
+import random
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -888,7 +888,7 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
         logger.debug(f"Fetching popular items for appid {appid} from Steam Market")
         if force_refresh:
             time.sleep(2)
-        url = f"https://steamcommunity.com/market/search/render/?appid={appid}&norender=1&count=10"
+        url = f"https://steamcommunity.com/market/search/render/?appid={appid}&norender=1&count=100"
         response = session.get(url, timeout=10)
         logger.debug(f"Popular items response: {response.status_code} - {response.text[:200]}")
 
@@ -901,15 +901,15 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
             logger.error(f"Failed to fetch popular items for appid {appid}: API returned success=false")
             raise HTTPException(status_code=500, detail="Failed to fetch popular items: API error")
 
-        items = []
-        for listing in data.get("results", [])[:10]:
+        all_items = []
+        for listing in data.get("results", [])[:100]:
             name = listing.get("name", "Unknown Item")
             price = listing.get("sell_price_text", "N/A")
             icon_url = listing.get("asset_description", {}).get("icon_url", "")
             icon_url = f"https://steamcommunity-a.akamaihd.net/economy/image/{icon_url}" if icon_url else "https://via.placeholder.com/150"
             item_url = f"https://steamcommunity.com/market/listings/{appid}/{quote(name)}"
 
-            items.append({
+            all_items.append({
                 "name": name,
                 "price": price,
                 "icon_url": icon_url,
@@ -917,13 +917,15 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
                 "appid": appid
             })
 
-        if not items:
+        if not all_items:
             logger.warning(f"No popular items found for appid {appid}")
             raise HTTPException(status_code=404, detail="No popular items found")
 
+        items = random.sample(all_items, min(10, len(all_items)))
+
         popular_items_cache[cache_key] = items
         save_popular_items_cache({cache_key: items})
-        logger.info(f"Popular items fetched for appid {appid}: {len(items)} items")
+        logger.info(f"Popular items fetched for appid {appid}: {len(items)} items (randomly selected from {len(all_items)})")
         return {"items": items}
     except Exception as e:
         logger.error(f"Failed to fetch popular items: {e}")
