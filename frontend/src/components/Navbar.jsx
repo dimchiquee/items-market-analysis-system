@@ -39,8 +39,6 @@ const UserInfo = styled.div`
 
 const Username = styled.span`
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 `;
 
 const Avatar = styled.img`
