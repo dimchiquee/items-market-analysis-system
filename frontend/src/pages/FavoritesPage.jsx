@@ -11,12 +11,22 @@ const FavoritesPageContainer = styled.div`
   display: flex;
   min-height: 100vh;
   padding-top: 60px;
+  position: relative;
 `;
 
 const MainContent = styled.div`
   flex-grow: 1;
   padding: 2rem;
   background-color: #f0f0f0;
+  transition: margin-right 0.3s ease;
+  margin-right: ${props => props.isSidebarOpen ? '400px' : '0'};
+`;
+
+const HeaderContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 `;
 
 const FavoritesGrid = styled.div`
@@ -47,11 +57,6 @@ const ItemImage = styled.img`
 const ItemName = styled.p`
   margin: 0.5rem 0;
   font-size: 1rem;
-`;
-
-const ItemPrice = styled.p`
-  margin: 0;
-  color: #666;
 `;
 
 const RemoveButton = styled.button`
@@ -172,6 +177,12 @@ const ModalButton = styled.button`
   }
 `;
 
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+`;
+
 const HorizonInput = styled.input`
   margin-left: 0.5rem;
   padding: 0.5rem;
@@ -206,6 +217,119 @@ const ErrorMessage = styled.div`
   text-align: center;
 `;
 
+const Sidebar = styled.div`
+  position: fixed;
+  top: 60px;
+  right: 0;
+  width: 600px;
+  height: calc(100vh - 60px);
+  background-color: #fff;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(100%)')};
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 1rem;
+`;
+
+const SidebarHeader = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+`;
+
+const CloseButtonContainer = styled.div`
+  display: flex;
+  width: 100%;
+  flex-direction: row-reverse;
+`;
+
+const SidebarButton = styled.button`
+  background-color: #66c0f4;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  &:hover {
+    background-color: #8ed1ff;
+  }
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
+const UpdateTimestamp = styled.span`
+  font-size: 0.9rem;
+  color: #555;
+  display: block;
+  margin-top: 0.5rem;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #d8000c;
+  &:hover {
+    color: #ff3333;
+  }
+`;
+
+const RecommendationSection = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const RecommendationTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+`;
+
+const TableHeader = styled.th`
+  padding: 0.5rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  font-weight: bold;
+`;
+
+const TableRow = styled.tr`
+  &:hover {
+    background-color: #f9f9f9;
+  }
+`;
+
+const TableCell = styled.td`
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ItemNameCell = styled(TableCell)`
+  max-width: 120px;
+`;
+
+const RecommendationCell = styled(TableCell)`
+  white-space: normal;
+  max-width: 150px;
+`;
+
+const TrendIcon = styled.span`
+  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+`;
+
+const RecommendationText = styled.span`
+  font-weight: ${props => (props.isUp ? 'bold' : 'normal')};
+  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+`;
+
 const FavoritesPage = () => {
   const [user, setUser] = useState(null);
   const [currency, setCurrency] = useState('$');
@@ -218,6 +342,10 @@ const FavoritesPage = () => {
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [itemHistory, setItemHistory] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState({ favorites: [] });
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const chartRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -238,12 +366,126 @@ const FavoritesPage = () => {
 
   const convertPrice = (price, fromCurrency = '$') => {
     if (!price || price === 'N/A' || price === 'Загрузка...') return price;
-    const numericPrice = parseFloat(price.replace('$', '')) || 0;
+    const numericPrice = parseFloat(price.replace(/[^0-9.]/g, '')) || 0;
     if (fromCurrency === currency) return `${numericPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
 
     const priceInUSD = fromCurrency === '$' ? numericPrice : numericPrice / exchangeRate[fromCurrency];
     const convertedPrice = currency === '$' ? priceInUSD : priceInUSD * exchangeRate[currency];
     return `${convertedPrice.toFixed(2)}${currency === '¥JPY' || currency === '¥CNY' ? currency : currency}`;
+  };
+
+  const getCachedPrediction = (appid, marketHashName, horizon) => {
+    const cacheKey = `${appid}:${marketHashName}:${horizon}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      const now = new Date();
+      if ((now - new Date(timestamp)) / 1000 / 3600 < 24) {
+        return data;
+      }
+    }
+    return null;
+  };
+
+  const setCachedPrediction = (appid, marketHashName, horizon, data) => {
+    const cacheKey = `${appid}:${marketHashName}:${horizon}`;
+    const now = new Date().toISOString();
+    localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: now }));
+  };
+
+  const fetchHistoryForPrediction = async (appid, marketHashName) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/history`, {
+        params: { token, market_hash_name: marketHashName, appid }
+      });
+      return response.data.history;
+    } catch (error) {
+      console.error(`Failed to fetch history for ${marketHashName}:`, error);
+      throw error;
+    }
+  };
+
+  const fetchPriceForItem = async (appid, marketHashName) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/price`, {
+        params: { token, market_hash_name: marketHashName, appid }
+      });
+      return response.data.steam_price || 'N/A';
+    } catch (error) {
+      console.error(`Failed to fetch price for ${marketHashName}:`, error);
+      return 'N/A';
+    }
+  };
+
+  const fetchPrediction = async (appid, marketHashName, horizon) => {
+    try {
+      await fetchHistoryForPrediction(appid, marketHashName);
+
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/predict_price`, {
+        params: { token, market_hash_name: marketHashName, appid, horizon },
+      });
+      const convertedPrediction = {
+        ...response.data,
+        last_known_price: convertPrice(`$${response.data.last_known_price}`),
+        predictions: response.data.predictions.map(pred => ({
+          ...pred,
+          predicted_price: convertPrice(`$${pred.predicted_price}`),
+        })),
+      };
+      setCachedPrediction(appid, marketHashName, horizon, convertedPrediction);
+      return convertedPrediction;
+    } catch (error) {
+      console.error(`Failed to fetch prediction for ${marketHashName}:`, error);
+      return null;
+    }
+  };
+
+  const updateRecommendations = async () => {
+    setIsUpdating(true);
+    const newRecommendations = { favorites: [] };
+
+    const favoritesPromises = favorites.map(async (item) => {
+      let pred = getCachedPrediction(item.appid, item.market_hash_name, 7);
+      if (!pred) pred = await fetchPrediction(item.appid, item.market_hash_name, 7);
+      const steamPrice = await fetchPriceForItem(item.appid, item.market_hash_name);
+      if (pred && pred.predictions.length > 0 && steamPrice !== 'N/A') {
+        const lastPred = pred.predictions[pred.predictions.length - 1];
+        return {
+          ...item,
+          steam_price: steamPrice,
+          predictedPrice: lastPred.predicted_price,
+          overallChange: calculateOverallChange(steamPrice, lastPred.predicted_price),
+        };
+      }
+      return null;
+    });
+
+    const favoritesData = (await Promise.all(favoritesPromises)).filter(Boolean);
+
+    const recommendedItems = favoritesData
+      .filter(item => item.overallChange > 0)
+      .sort((a, b) => b.overallChange - a.overallChange)
+      .slice(0, 5);
+    const notRecommendedItems = favoritesData
+      .filter(item => item.overallChange <= 0)
+      .sort((a, b) => a.overallChange - b.overallChange)
+      .slice(0, 5);
+
+    newRecommendations.favorites = [...recommendedItems, ...notRecommendedItems];
+
+    setRecommendations(newRecommendations);
+    setLastUpdate(new Date().toLocaleString('en-GB', { timeZone: 'Europe/Paris' }));
+    setIsUpdating(false);
+  };
+
+  const calculateOverallChange = (steamPrice, predictedPrice) => {
+    const currentPriceNumeric = parseFloat(steamPrice.replace(/[^0-9.]/g, '')) || 0;
+    const predictedPriceNumeric = parseFloat(predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+    if (currentPriceNumeric === 0) return 0;
+    return ((predictedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
   };
 
   useEffect(() => {
@@ -254,9 +496,7 @@ const FavoritesPage = () => {
     }
 
     axios.get('http://localhost:8000/auth/verify', { params: { token } })
-      .then(response => {
-        setUser(response.data);
-      })
+      .then(response => setUser(response.data))
       .catch(error => {
         console.error('Error:', error);
         if (error.response?.status === 401) {
@@ -268,10 +508,9 @@ const FavoritesPage = () => {
     axios.get('http://localhost:8000/auth/favorites', { params: { token } })
       .then(response => {
         setFavorites(response.data.items);
+        updateRecommendations();
       })
-      .catch(error => {
-        console.error('Failed to fetch favorites:', error);
-      });
+      .catch(error => console.error('Failed to fetch favorites:', error));
   }, []);
 
   const fetchHistory = async (item) => {
@@ -302,6 +541,7 @@ const FavoritesPage = () => {
         params: { token, appid: item.appid, market_hash_name: item.market_hash_name }
       });
       setFavorites(prev => prev.filter(fav => !(fav.appid === item.appid && fav.market_hash_name === item.market_hash_name)));
+      updateRecommendations();
     } catch (error) {
       console.error('Failed to remove item from favorites:', error);
     }
@@ -355,7 +595,7 @@ const FavoritesPage = () => {
     setHorizon(1);
   };
 
-  const fetchPrediction = async () => {
+  const fetchPredictionForModal = async () => {
     if (!predictItem) return;
 
     setPredictionLoading(true);
@@ -363,6 +603,12 @@ const FavoritesPage = () => {
     setPrediction(null);
 
     try {
+      const currentPrice = await fetchPriceForItem(predictItem.appid, predictItem.market_hash_name);
+      if (currentPrice === 'N/A') throw new Error('Не удалось получить текущую цену предмета');
+
+      const currentPriceNumeric = parseFloat(currentPrice.replace(/[^0-9.]/g, '')) || 0;
+
+      await fetchHistoryForPrediction(predictItem.appid, predictItem.market_hash_name);
       const token = localStorage.getItem('auth_token');
       const response = await axios.get(`http://localhost:8000/auth/predict_price`, {
         params: {
@@ -373,13 +619,26 @@ const FavoritesPage = () => {
         },
       });
 
+      const apiLastKnownPriceNumeric = parseFloat(response.data.last_known_price) || 0;
+      const adjustmentFactor = apiLastKnownPriceNumeric !== 0 ? currentPriceNumeric / apiLastKnownPriceNumeric : 1;
+
+      const adjustedPredictions = response.data.predictions.map(pred => {
+        const predictedPriceNumeric = parseFloat(pred.predicted_price) || 0;
+        const adjustedPriceNumeric = predictedPriceNumeric * adjustmentFactor;
+        const adjustedPrice = convertPrice(`$${adjustedPriceNumeric}`);
+        const predictedPctChange = ((adjustedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
+
+        return {
+          ...pred,
+          predicted_price: adjustedPrice,
+          predicted_pct_change: predictedPctChange,
+        };
+      });
+
       const convertedPrediction = {
         ...response.data,
-        last_known_price: convertPrice(`$${response.data.last_known_price}`),
-        predictions: response.data.predictions.map(pred => ({
-          ...pred,
-          predicted_price: convertPrice(`$${pred.predicted_price}`),
-        })),
+        last_known_price: convertPrice(currentPrice),
+        predictions: adjustedPredictions,
       };
 
       setPrediction(convertedPrediction);
@@ -532,11 +791,20 @@ const FavoritesPage = () => {
     }
   };
 
+  const getRecommendationText = (overallChange) => {
+    if (overallChange > 0) return 'рекомендуется к покупке';
+    if (overallChange < 0) return 'не рекомендуется к покупке';
+    return 'стабильная цена';
+  };
+
   return (
     <FavoritesPageContainer>
       <Navbar user={user} currency={currency} setCurrency={setCurrency} />
-      <MainContent>
-        <h1>Избранное</h1>
+      <MainContent isSidebarOpen={isSidebarOpen}>
+        <HeaderContainer>
+          <h1>Избранное</h1>
+          <SidebarButton onClick={() => setIsSidebarOpen(true)}>Рекомендации</SidebarButton>
+        </HeaderContainer>
         {favorites.length === 0 ? (
           <p>Ваш список избранного пуст.</p>
         ) : (
@@ -623,10 +891,10 @@ const FavoritesPage = () => {
                   />
                 </label>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              <ButtonGroup>
                 <ModalButton
                   primary
-                  onClick={fetchPrediction}
+                  onClick={fetchPredictionForModal}
                   disabled={predictionLoading || horizon < 1 || horizon > 14}
                 >
                   {predictionLoading ? 'Прогнозирование...' : 'Прогнозировать'}
@@ -634,7 +902,7 @@ const FavoritesPage = () => {
                 <ModalButton onClick={closePredictionModal}>
                   Закрыть
                 </ModalButton>
-              </div>
+              </ButtonGroup>
               {predictionError && (
                 <ErrorMessage>{predictionError}</ErrorMessage>
               )}
@@ -657,6 +925,56 @@ const FavoritesPage = () => {
           </ModalOverlay>
         )}
       </MainContent>
+      <Sidebar isOpen={isSidebarOpen}>
+        <SidebarHeader>
+          <CloseButtonContainer>
+            <CloseButton onClick={() => setIsSidebarOpen(false)}>×</CloseButton>
+          </CloseButtonContainer>
+          <div>
+            <SidebarButton onClick={updateRecommendations} disabled={isUpdating}>
+              {isUpdating ? 'Обновление...' : 'Обновить рекомендации'}
+            </SidebarButton>
+            {lastUpdate && <UpdateTimestamp>Обновлено: {lastUpdate}</UpdateTimestamp>}
+          </div>
+        </SidebarHeader>
+        <RecommendationSection>
+          <h3>Рекомендации по избранным (на 1 неделю)</h3>
+          {recommendations.favorites.length === 0 ? (
+            <p>Рекомендации отсутствуют. Добавьте предметы в избранное.</p>
+          ) : (
+            <RecommendationTable>
+              <thead>
+                <tr>
+                  <TableHeader>Предмет</TableHeader>
+                  <TableHeader>Текущая цена</TableHeader>
+                  <TableHeader>Прогноз цены</TableHeader>
+                  <TableHeader>Изменение</TableHeader>
+                  <TableHeader>Рекомендация</TableHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendations.favorites.map((item, index) => (
+                  <TableRow key={index}>
+                    <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
+                    <TableCell>{convertPrice(item.steam_price)}</TableCell>
+                    <TableCell>{item.predictedPrice}</TableCell>
+                    <TableCell>
+                      <TrendIcon isUp={item.overallChange > 0}>
+                        {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
+                      </TrendIcon>
+                    </TableCell>
+                    <RecommendationCell>
+                      <RecommendationText isUp={item.overallChange > 0}>
+                        {getRecommendationText(item.overallChange)}
+                      </RecommendationText>
+                    </RecommendationCell>
+                  </TableRow>
+                ))}
+              </tbody>
+            </RecommendationTable>
+          )}
+        </RecommendationSection>
+      </Sidebar>
     </FavoritesPageContainer>
   );
 };
