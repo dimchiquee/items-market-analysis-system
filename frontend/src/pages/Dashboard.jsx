@@ -21,6 +21,15 @@ const MainContent = styled.div`
   padding: 2rem;
   background-color: #f0f0f0;
   margin-left: 250px;
+  transition: margin-right 0.3s ease;
+  margin-right: ${props => props.isRecommendationSidebarOpen ? '400px' : '0'};
+`;
+
+const HeaderContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 `;
 
 const InventoryGrid = styled.div`
@@ -219,6 +228,145 @@ const TotalValue = styled.div`
   font-weight: bold;
 `;
 
+const RecommendationSidebar = styled.div`
+  position: fixed;
+  top: 60px;
+  right: 0;
+  width: 400px;
+  height: calc(100vh - 60px);
+  background-color: #fff;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(100%)')};
+  transition: transform 0.3s ease;
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 1rem;
+`;
+
+const AllRecommendationsModal = styled.div`
+  position: fixed;
+  top: 60px;
+  left: 0;
+  width: 80%;
+  max-width: 1200px;
+  height: calc(100vh - 60px);
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  overflow-y: auto;
+  padding: 1rem;
+  transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(-100%)')};
+  transition: transform 0.3s ease;
+  margin: 0 auto;
+`;
+
+const SidebarHeader = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+`;
+
+const CloseButtonContainer = styled.div`
+  display: flex;
+  width: 100%;
+  flex-direction: row-reverse;
+`;
+
+const SidebarButton = styled.button`
+  background-color: #66c0f4;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  &:hover {
+    background-color: #8ed1ff;
+  }
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #d8000c;
+  &:hover {
+    color: #ff3333;
+  }
+`;
+
+const RecommendationSection = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const RecommendationTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+`;
+
+const AllRecommendationsTableWrapper = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
+const AllRecommendationsTable = styled.table`
+  width: 100%;
+  min-width: 800px;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+`;
+
+const TableHeader = styled.th`
+  padding: 0.5rem;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  font-weight: bold;
+  cursor: pointer;
+  &:hover {
+    background-color: #e5e5e5;
+  }
+`;
+
+const TableRow = styled.tr`
+  &:hover {
+    background-color: #f9f9f9;
+  }
+`;
+
+const TableCell = styled.td`
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ItemNameCell = styled(TableCell)`
+  max-width: 120px;
+`;
+
+const RecommendationCell = styled(TableCell)`
+  white-space: normal;
+  max-width: 150px;
+`;
+
+const TrendIcon = styled.span`
+  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+`;
+
+const RecommendationText = styled.span`
+  font-weight: ${props => (props.isUp ? 'bold' : 'normal')};
+  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+`;
+
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
@@ -259,6 +407,17 @@ const Dashboard = () => {
   const [favoritesMessage, setFavoritesMessage] = useState('');
   const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
   const [resetSorting, setResetSorting] = useState(false);
+  const [isRecommendationSidebarOpen, setIsRecommendationSidebarOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState({ inventory: [] });
+  const [allRecommendations, setAllRecommendations] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [recommendationProgress, setRecommendationProgress] = useState(0);
+  const [estimatedTimeMin, setEstimatedTimeMin] = useState(0);
+  const [remainingTimeMin, setRemainingTimeMin] = useState(0);
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false);
+  const [sortType, setSortType] = useState('default');
+  const [sortDirection, setSortDirection] = useState({});
 
   const exchangeRate = {
     '$': 1,
@@ -331,6 +490,22 @@ const Dashboard = () => {
     });
   };
 
+  const getCachedPrediction = (appid, marketHashName, horizon) => {
+    const cacheKey = `${appid}:${marketHashName}:${horizon}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      return { data, timestamp };
+    }
+    return null;
+  };
+
+  const setCachedPrediction = (appid, marketHashName, horizon, data) => {
+    const cacheKey = `${appid}:${marketHashName}:${horizon}`;
+    const now = new Date().toISOString();
+    localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: now }));
+  };
+
   const fetchPrices = async (items, token, useCache = true, forceRefresh = false) => {
     setPriceLoading(true);
     setLoadedCount(0);
@@ -343,7 +518,7 @@ const Dashboard = () => {
       const item = updatedInventory[i];
       const cacheKey = `${item.appid}:${item.market_hash_name}`;
 
-      if (useCache && cachedPrices[cacheKey]) {
+      if (useCache && cachedPrices[cacheKey] && !forceRefresh) {
         console.log(`Using cached price for ${item.name}: ${cachedPrices[cacheKey]}`);
         updatedInventory[i] = { ...item, ...cachedPrices[cacheKey] };
         setLoadedCount(prev => prev + 1);
@@ -362,31 +537,36 @@ const Dashboard = () => {
         updatedInventory[i] = { ...item, ...response.data };
         cachedPrices[cacheKey] = response.data;
       } catch (error) {
-        console.error(`Failed to fetch price for ${item.name}:`, error.response ? error.response.data : error.message);
-        if (item.appid === '730') {
-          updatedInventory[i] = {
-            ...item,
-            steam_price: 'N/A',
-            market_csgo_price: 'N/A',
-            lis_skins_price: 'N/A'
-          };
-          cachedPrices[cacheKey] = {
-            steam_price: 'N/A',
-            market_csgo_price: 'N/A',
-            lis_skins_price: 'N/A'
-          };
+        if (error.response && error.response.status === 429 && cachedPrices[cacheKey]) {
+          console.log(`429 Too Many Requests for ${item.name}. Using cached data: ${cachedPrices[cacheKey]}`);
+          updatedInventory[i] = { ...item, ...cachedPrices[cacheKey] };
         } else {
-          updatedInventory[i] = {
-            ...item,
-            steam_price: 'N/A',
-            market_dota2_price: 'N/A',
-            lis_skins_price: 'N/A'
-          };
-          cachedPrices[cacheKey] = {
-            steam_price: 'N/A',
-            market_dota2_price: 'N/A',
-            lis_skins_price: 'N/A'
-          };
+          console.error(`Failed to fetch price for ${item.name}:`, error.response ? error.response.data : error.message);
+          if (item.appid === '730') {
+            updatedInventory[i] = {
+              ...item,
+              steam_price: 'N/A',
+              market_csgo_price: 'N/A',
+              lis_skins_price: 'N/A'
+            };
+            cachedPrices[cacheKey] = {
+              steam_price: 'N/A',
+              market_csgo_price: 'N/A',
+              lis_skins_price: 'N/A'
+            };
+          } else {
+            updatedInventory[i] = {
+              ...item,
+              steam_price: 'N/A',
+              market_dota2_price: 'N/A',
+              lis_skins_price: 'N/A'
+            };
+            cachedPrices[cacheKey] = {
+              steam_price: 'N/A',
+              market_dota2_price: 'N/A',
+              lis_skins_price: 'N/A'
+            };
+          }
         }
       }
 
@@ -405,6 +585,10 @@ const Dashboard = () => {
     const token = localStorage.getItem('auth_token');
     try {
       localStorage.removeItem('price_cache');
+      localStorage.removeItem('history_cache');
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('history:')) localStorage.removeItem(key);
+      });
       await axios.get('http://localhost:8000/auth/reset_cache', { params: { token } });
       fetchPrices(inventory, token, false, true);
     } catch (error) {
@@ -414,12 +598,32 @@ const Dashboard = () => {
 
   const fetchHistory = async (item, token) => {
     setHistoryLoading(true);
+    const cacheKey = `history:${item.appid}:${item.market_hash_name}`;
+    const cachedHistory = localStorage.getItem(cacheKey);
+
+    if (cachedHistory) {
+      const { data, timestamp } = JSON.parse(cachedHistory);
+      const now = new Date();
+      console.log(`Cached history for ${item.name} exists, age: ${(now - new Date(timestamp)) / 1000 / 3600} hours`);
+      const convertedHistory = data.map(data => {
+        const price = parseFloat(data[1]);
+        const convertedPrice = currency === '$' ? price : price * exchangeRate[currency];
+        return [data[0], convertedPrice.toString()];
+      });
+      setItemHistory(convertedHistory);
+      setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
+      setHistoryLoading(false);
+      return;
+    }
+
     try {
       const response = await axios.get(`http://localhost:8000/auth/history`, {
         params: { token, market_hash_name: item.market_hash_name, appid: item.appid }
       });
       console.log(`History response for ${item.name}:`, response.data);
-      const convertedHistory = response.data.history.map(data => {
+      const historyData = response.data.history;
+      localStorage.setItem(cacheKey, JSON.stringify({ data: historyData, timestamp: new Date().toISOString() }));
+      const convertedHistory = historyData.map(data => {
         const price = parseFloat(data[1]);
         const convertedPrice = currency === '$' ? price : price * exchangeRate[currency];
         return [data[0], convertedPrice.toString()];
@@ -427,10 +631,51 @@ const Dashboard = () => {
       setItemHistory(convertedHistory);
       setChartState({ xMin: null, xMax: null, yMin: null, yMax: null });
     } catch (error) {
-      console.error(`Failed to fetch history for ${item.name}:`, error.response ? error.response.data : error.message);
-      setItemHistory([]);
+      if (error.response && error.response.status === 429 && cachedHistory) {
+        console.log(`429 Too Many Requests for ${item.name}. Using cached history`);
+        const { data } = JSON.parse(cachedHistory);
+        const convertedHistory = data.map(data => {
+          const price = parseFloat(data[1]);
+          const convertedPrice = currency === '$' ? price : price * exchangeRate[currency];
+          return [data[0], convertedPrice.toString()];
+        });
+        setItemHistory(convertedHistory);
+      } else {
+        console.error(`Failed to fetch history for ${item.name}:`, error.response ? error.response.data : error.message);
+        setItemHistory([]);
+      }
     }
     setHistoryLoading(false);
+  };
+
+  const fetchHistoryForPrediction = async (appid, marketHashName) => {
+    const cacheKey = `history:${appid}:${marketHashName}`;
+    const cachedHistory = localStorage.getItem(cacheKey);
+
+    if (cachedHistory) {
+      const { data, timestamp } = JSON.parse(cachedHistory);
+      const now = new Date();
+      console.log(`Cached history for ${marketHashName} exists, age: ${(now - new Date(timestamp)) / 1000 / 3600} hours`);
+      return data;
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/history`, {
+        params: { token, market_hash_name: marketHashName, appid }
+      });
+      const historyData = response.data.history;
+      localStorage.setItem(cacheKey, JSON.stringify({ data: historyData, timestamp: new Date().toISOString() }));
+      console.log(`Fetched and cached history for ${marketHashName}`);
+      return historyData;
+    } catch (error) {
+      if (error.response && error.response.status === 429 && cachedHistory) {
+        console.log(`429 Too Many Requests for ${marketHashName}. Using cached history`);
+        return JSON.parse(cachedHistory).data;
+      }
+      console.error(`Failed to fetch history for ${marketHashName}:`, error);
+      return [];
+    }
   };
 
   const predictPrice = async (item) => {
@@ -440,7 +685,80 @@ const Dashboard = () => {
     setHorizon(1);
   };
 
-  const fetchPrediction = async () => {
+  const fetchPrediction = async (appid, marketHashName, horizon) => {
+    let cached = getCachedPrediction(appid, marketHashName, horizon);
+    if (cached) {
+      console.log(`Using cached prediction for ${marketHashName}, age: ${(new Date() - new Date(cached.timestamp)) / 1000 / 3600} hours`);
+      const convertedPrediction = {
+        ...cached.data,
+        last_known_price: convertPrice(`$${cached.data.last_known_price}`),
+        predictions: cached.data.predictions.map(pred => ({
+          ...pred,
+          predicted_price: convertPrice(`$${pred.predicted_price}`),
+        })),
+      };
+      return convertedPrediction;
+    }
+
+    try {
+      await fetchHistoryForPrediction(appid, marketHashName);
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/predict_price`, {
+        params: { token, market_hash_name: marketHashName, appid, horizon },
+      });
+      console.log(`Prediction response for ${marketHashName}:`, response.data);
+      const convertedPrediction = {
+        ...response.data,
+        last_known_price: convertPrice(`$${response.data.last_known_price}`),
+        predictions: response.data.predictions.map(pred => ({
+          ...pred,
+          predicted_price: convertPrice(`$${pred.predicted_price}`),
+        })),
+      };
+      setCachedPrediction(appid, marketHashName, horizon, convertedPrediction);
+      return convertedPrediction;
+    } catch (error) {
+      if (error.response && error.response.status === 429) {
+        console.log(`429 Too Many Requests for ${marketHashName}. Using cached prediction if available`);
+        if (cached) {
+          const convertedPrediction = {
+            ...cached.data,
+            last_known_price: convertPrice(`$${cached.data.last_known_price}`),
+            predictions: cached.data.predictions.map(pred => ({
+              ...pred,
+              predicted_price: convertPrice(`$${pred.predicted_price}`),
+            })),
+          };
+          return convertedPrediction;
+        }
+      }
+      console.error(`Failed to fetch prediction for ${marketHashName}:`, error);
+      return null;
+    }
+  };
+
+  const fetchPriceForItem = async (appid, marketHashName) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(`http://localhost:8000/auth/price`, {
+        params: { token, market_hash_name: marketHashName, appid }
+      });
+      return response.data.steam_price || 'N/A';
+    } catch (error) {
+      if (error.response && error.response.status === 429) {
+        const cachedPrices = JSON.parse(localStorage.getItem('price_cache') || '{}');
+        const cacheKey = `${appid}:${marketHashName}`;
+        if (cachedPrices[cacheKey]) {
+          console.log(`429 Too Many Requests for ${marketHashName}. Using cached price: ${cachedPrices[cacheKey].steam_price}`);
+          return cachedPrices[cacheKey].steam_price || 'N/A';
+        }
+      }
+      console.error(`Failed to fetch price for ${marketHashName}:`, error);
+      return 'N/A';
+    }
+  };
+
+  const fetchPredictionForModal = async () => {
     if (!predictItem) return;
 
     setPredictionLoading(true);
@@ -448,6 +766,14 @@ const Dashboard = () => {
     setPrediction(null);
 
     try {
+      const currentPrice = await fetchPriceForItem(predictItem.appid, predictItem.market_hash_name);
+      if (currentPrice === 'N/A') throw new Error('Не удалось получить текущую цену предмета');
+
+      const currentPriceNumeric = parseFloat(currentPrice.replace(/[^0-9.]/g, '')) || 0;
+
+      const history = await fetchHistoryForPrediction(predictItem.appid, predictItem.market_hash_name);
+      if (history.length === 0) throw new Error('Нет исторических данных для прогнозирования');
+
       const token = localStorage.getItem('auth_token');
       const response = await axios.get(`http://localhost:8000/auth/predict_price`, {
         params: {
@@ -458,22 +784,152 @@ const Dashboard = () => {
         },
       });
 
+      const apiLastKnownPriceNumeric = parseFloat(response.data.last_known_price) || 0;
+      const adjustmentFactor = apiLastKnownPriceNumeric !== 0 ? currentPriceNumeric / apiLastKnownPriceNumeric : 1;
+
+      const adjustedPredictions = response.data.predictions.map(pred => {
+        const predictedPriceNumeric = parseFloat(pred.predicted_price) || 0;
+        const adjustedPriceNumeric = predictedPriceNumeric * adjustmentFactor;
+        const adjustedPrice = convertPrice(`$${adjustedPriceNumeric}`);
+        const predictedPctChange = ((adjustedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
+
+        return {
+          ...pred,
+          predicted_price: adjustedPrice,
+          predicted_pct_change: predictedPctChange,
+        };
+      });
+
       const convertedPrediction = {
         ...response.data,
-        last_known_price: convertPrice(`$${response.data.last_known_price}`),
-        predictions: response.data.predictions.map(pred => ({
-          ...pred,
-          predicted_price: convertPrice(`$${pred.predicted_price}`),
-        })),
+        last_known_price: convertPrice(currentPrice),
+        predictions: adjustedPredictions,
       };
 
       setPrediction(convertedPrediction);
     } catch (error) {
-      console.error(`Failed to fetch prediction for ${predictItem.name}:`, error.response ? error.response.data : error.message);
-      setPredictionError(error.response?.data?.detail || 'Не удалось получить прогноз цены');
+      if (error.response && error.response.status === 429) {
+        console.log(`429 Too Many Requests for ${predictItem.name}. Using cached prediction if available`);
+        const cached = getCachedPrediction(predictItem.appid, predictItem.market_hash_name, horizon);
+        if (cached) {
+          const currentPrice = await fetchPriceForItem(predictItem.appid, predictItem.market_hash_name);
+          const currentPriceNumeric = parseFloat(currentPrice.replace(/[^0-9.]/g, '')) || 0;
+          const apiLastKnownPriceNumeric = parseFloat(cached.data.last_known_price.replace(/[^0-9.]/g, '')) || 0;
+          const adjustmentFactor = apiLastKnownPriceNumeric !== 0 ? currentPriceNumeric / apiLastKnownPriceNumeric : 1;
+
+          const adjustedPredictions = cached.data.predictions.map(pred => {
+            const predictedPriceNumeric = parseFloat(pred.predicted_price.replace(/[^0-9.]/g, '')) || 0;
+            const adjustedPriceNumeric = predictedPriceNumeric * adjustmentFactor;
+            const adjustedPrice = convertPrice(`$${adjustedPriceNumeric}`);
+            const predictedPctChange = ((adjustedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
+
+            return {
+              ...pred,
+              predicted_price: adjustedPrice,
+              predicted_pct_change: predictedPctChange,
+            };
+          });
+
+          setPrediction({
+            ...cached.data,
+            last_known_price: convertPrice(currentPrice),
+            predictions: adjustedPredictions,
+          });
+        } else {
+          setPredictionError('Превышен лимит запросов, и нет кешированных данных.');
+        }
+      } else {
+        console.error(`Failed to fetch prediction for ${predictItem.name}:`, error.response ? error.response.data : error.message);
+        setPredictionError(error.response?.data?.detail || 'Не удалось получить прогноз цены');
+      }
     } finally {
       setPredictionLoading(false);
     }
+  };
+
+  const updateRecommendations = async () => {
+    setIsUpdating(true);
+    setRecommendationProgress(0);
+    const newAllRecommendations = [];
+    const totalItems = filteredInventory.length;
+    const delayMs = 6000;
+    let itemsNeedingDelay = 0;
+
+    for (let i = 0; i < totalItems; i++) {
+      const item = filteredInventory[i];
+      const cacheKey = `history:${item.appid}:${item.market_hash_name}`;
+      const cachedHistory = localStorage.getItem(cacheKey);
+      if (!cachedHistory) itemsNeedingDelay++;
+    }
+
+    const totalEstimatedTimeMs = totalItems * delayMs;
+    setEstimatedTimeMin(Math.ceil(totalEstimatedTimeMs / 60000));
+    setRemainingTimeMin(Math.ceil((totalItems * delayMs) / 60000));
+
+    for (let i = 0; i < totalItems; i++) {
+      const item = filteredInventory[i];
+      const cacheKey = `history:${item.appid}:${item.market_hash_name}`;
+      let wasRequestMade = false;
+
+      try {
+        const history = await fetchHistoryForPrediction(item.appid, item.market_hash_name);
+        if (!localStorage.getItem(cacheKey) || history.length === 0) {
+          wasRequestMade = true;
+        }
+        let steamPrice = item.steam_price;
+        if (!steamPrice || steamPrice === 'N/A') {
+          steamPrice = await fetchPriceForItem(item.appid, item.market_hash_name);
+        }
+        const pred = await fetchPrediction(item.appid, item.market_hash_name, 7);
+        if (pred && pred.predictions.length > 0 && steamPrice !== 'N/A') {
+          const lastPred = pred.predictions[pred.predictions.length - 1];
+          const recommendation = {
+            ...item,
+            steam_price: steamPrice,
+            predictedPrice: lastPred.predicted_price,
+            overallChange: calculateOverallChange(steamPrice, lastPred.predicted_price),
+          };
+          newAllRecommendations.push(recommendation);
+        } else {
+          console.log(`Skipping ${item.market_hash_name}: Invalid data (steamPrice=${steamPrice}, prediction=${pred ? 'available' : 'unavailable'})`);
+        }
+      } catch (error) {
+        console.error(`Error processing ${item.name}:`, error);
+      }
+
+      const currentProgress = ((i + 1) / totalItems) * 100;
+      setRecommendationProgress(currentProgress);
+
+      const remainingItems = totalItems - (i + 1);
+      setRemainingTimeMin(Math.ceil((remainingItems * delayMs) / 60000));
+
+      if (wasRequestMade && i < totalItems - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    const recommendedItems = newAllRecommendations
+      .filter(item => item.overallChange > 0)
+      .sort((a, b) => b.overallChange - a.overallChange)
+      .slice(0, 5);
+    const notRecommendedItems = newAllRecommendations
+      .filter(item => item.overallChange <= 0)
+      .sort((a, b) => a.overallChange - b.overallChange)
+      .slice(0, 5);
+
+    setRecommendations({ inventory: [...recommendedItems, ...notRecommendedItems] });
+    setAllRecommendations(newAllRecommendations);
+    setLastUpdate(new Date());
+    setRecommendationProgress(100);
+    setRemainingTimeMin(0);
+    setIsUpdating(false);
+  };
+
+  const calculateOverallChange = (steamPrice, predictedPrice) => {
+    const currentPriceNumeric = parseFloat(steamPrice.replace(/[^0-9.]/g, '')) || 0;
+    const predictedPriceNumeric = parseFloat(predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+    if (currentPriceNumeric === 0) return 0;
+    return ((predictedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
   };
 
   const loadInventory = (appid) => {
@@ -599,6 +1055,24 @@ const Dashboard = () => {
   }, [filteredInventory, currency]);
 
   useEffect(() => {
+    if (inventory.length > 0) {
+      const filtered = applyFilters(inventory);
+      setFilteredInventory(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
+          return [...filtered];
+        }
+        return prev;
+      });
+    }
+  }, [filters, inventory]);
+
+  useEffect(() => {
+    if (resetSorting) {
+      setResetSorting(false);
+    }
+  }, [resetSorting]);
+
+  useEffect(() => {
     if (itemHistory) {
       const convertedHistory = itemHistory.map(data => {
         const price = parseFloat(data[1]);
@@ -609,19 +1083,6 @@ const Dashboard = () => {
       setItemHistory(convertedHistory);
     }
   }, [currency]);
-
-  useEffect(() => {
-    if (inventory.length > 0) {
-      const filtered = applyFilters(inventory);
-      setFilteredInventory([...filtered]);
-    }
-  }, [filters, inventory]);
-
-  useEffect(() => {
-    if (resetSorting) {
-      setResetSorting(false);
-    }
-  }, [resetSorting]);
 
   const handleChartWheel = (event) => {
     const chart = chartRef.current;
@@ -719,15 +1180,23 @@ const Dashboard = () => {
 
   const handleSort = (sortType) => {
     let sorted = [...filteredInventory];
+    let hasChanged = false;
+
     if (sortType === 'price_asc') {
       sorted.sort((a, b) => (parseFloat(a.steam_price?.replace('$', '')) || 0) - (parseFloat(b.steam_price?.replace('$', '')) || 0));
+      hasChanged = true;
     } else if (sortType === 'price_desc') {
       sorted.sort((a, b) => (parseFloat(b.steam_price?.replace('$', '')) || 0) - (parseFloat(a.steam_price?.replace('$', '')) || 0));
+      hasChanged = true;
     } else if (sortType === '') {
       const filtered = applyFilters(originalInventory);
       sorted = [...filtered];
+      hasChanged = true;
     }
-    setFilteredInventory(sorted);
+
+    if (hasChanged) {
+      setFilteredInventory(sorted);
+    }
   };
 
   const handleFilter = (key, value) => {
@@ -819,6 +1288,51 @@ const Dashboard = () => {
     }
   };
 
+  const getRecommendationText = (overallChange) => {
+    if (overallChange > 0) return 'рекомендуется сохранить';
+    if (overallChange < 0) return 'рекомендуется продать';
+    return 'стабильная цена';
+  };
+
+  const handleSortAllRecommendations = (type) => {
+    const currentDirection = sortDirection[type] || 'asc';
+    const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+
+    let sorted = [...allRecommendations];
+    setSortType(type);
+    setSortDirection(prev => ({ ...prev, [type]: newDirection }));
+
+    switch (type) {
+      case 'price':
+        sorted.sort((a, b) => {
+          const priceA = parseFloat(a.steam_price.replace(/[^0-9.]/g, '')) || 0;
+          const priceB = parseFloat(b.steam_price.replace(/[^0-9.]/g, '')) || 0;
+          return newDirection === 'asc' ? priceA - priceB : priceB - priceA;
+        });
+        break;
+      case 'name':
+        sorted.sort((a, b) => {
+          return newDirection === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+        });
+        break;
+      case 'predictedPrice':
+        sorted.sort((a, b) => {
+          const priceA = parseFloat(a.predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+          const priceB = parseFloat(b.predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+          return newDirection === 'asc' ? priceA - priceB : priceB - priceA;
+        });
+        break;
+      case 'change':
+        sorted.sort((a, b) => {
+          return newDirection === 'asc' ? (a.overallChange || 0) - (b.overallChange || 0) : (b.overallChange || 0) - (a.overallChange || 0);
+        });
+        break;
+      default:
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    setAllRecommendations(sorted);
+  };
+
   return (
     <DashboardContainer>
       <Navbar user={user} currency={currency} setCurrency={setCurrency} />
@@ -831,8 +1345,11 @@ const Dashboard = () => {
         onResetFilters={handleResetFilters}
         resetSorting={resetSorting}
       />
-      <MainContent>
-        <h1>Ваш инвентарь</h1>
+      <MainContent isRecommendationSidebarOpen={isRecommendationSidebarOpen}>
+        <HeaderContainer>
+          <h1>Ваш инвентарь</h1>
+          <SidebarButton onClick={() => setIsRecommendationSidebarOpen(true)}>Рекомендации</SidebarButton>
+        </HeaderContainer>
         {!filters.game && !loading ? (
           <p>Выберите игру в боковой панели</p>
         ) : loading ? (
@@ -903,7 +1420,7 @@ const Dashboard = () => {
                 </PriceWrapper>
               </ItemInfoContainer>
               {favoritesMessage && (
-                <ErrorMessage style={{ backgroundColor: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#ccffcc' : '#ffcccc', color: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#008000' : '#d8000c' }}>
+                <ErrorMessage style={{ backgroundColor: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#ccffcc' : '#ffcccc', color: isItemInFavorites && favoritesMessage.includes('добавлен') ? '#008000' : '#d800c' }}>
                   {favoritesMessage}
                 </ErrorMessage>
               )}
@@ -959,7 +1476,7 @@ const Dashboard = () => {
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
                 <ModalButton
                   primary
-                  onClick={fetchPrediction}
+                  onClick={fetchPredictionForModal}
                   disabled={predictionLoading || horizon < 1 || horizon > 14}
                 >
                   {predictionLoading ? 'Прогнозирование...' : 'Прогнозировать'}
@@ -990,8 +1507,110 @@ const Dashboard = () => {
           </ModalOverlay>
         )}
       </MainContent>
-    </DashboardContainer>
-  );
-};
+      <RecommendationSidebar isOpen={isRecommendationSidebarOpen}>
+        <SidebarHeader>
+          <CloseButtonContainer>
+            <CloseButton onClick={() => setIsRecommendationSidebarOpen(false)}>×</CloseButton>
+          </CloseButtonContainer>
+          <div>
+            <SidebarButton onClick={updateRecommendations} disabled={isUpdating || filteredInventory.length === 0}>
+              {isUpdating ? 'Обновление...' : 'Обновить рекомендации'}
+            </SidebarButton>
+            {lastUpdate && <UpdateTimestamp>Обновлено: {new Date(lastUpdate).toLocaleString()}</UpdateTimestamp>}
+            {isUpdating && (
+              <ProgressText>
+                Обработка: {Math.round(recommendationProgress)}% (примерно {estimatedTimeMin} мин, осталось {remainingTimeMin} мин)
+              </ProgressText>
+            )}
+          </div>
+          <SidebarButton onClick={() => setShowAllRecommendations(true)}>Все рекомендации</SidebarButton>
+        </SidebarHeader>
+        <RecommendationSection>
+          <h3>Рекомендации по инвентарю (на 1 неделю)</h3>
+          {recommendations.inventory.length === 0 ? (
+            <p>Рекомендации отсутствуют. Обновите данные или выберите игру.</p>
+          ) : (
+            <RecommendationTable>
+              <thead>
+                <tr>
+                  <TableHeader>Предмет</TableHeader>
+                  <TableHeader>Текущая цена</TableHeader>
+                  <TableHeader>Прогноз цены</TableHeader>
+                  <TableHeader>Изменение</TableHeader>
+                  <TableHeader>Рекомендация</TableHeader>
+                </tr>
+              </thead>
+              <tbody>
+                {recommendations.inventory.map((item, index) => (
+                  <TableRow key={index}>
+                    <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
+                    <TableCell>{convertPrice(item.steam_price)}</TableCell>
+                    <TableCell>{item.predictedPrice}</TableCell>
+                    <TableCell>
+                      <TrendIcon isUp={item.overallChange > 0}>
+                        {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
+                      </TrendIcon>
+                    </TableCell>
+                    <RecommendationCell>
+                      <RecommendationText isUp={item.overallChange > 0}>
+                        {getRecommendationText(item.overallChange)}
+                      </RecommendationText>
+                    </RecommendationCell>
+                  </TableRow>
+                ))}
+              </tbody>
+            </RecommendationTable>
+          )}
+        </RecommendationSection>
+      </RecommendationSidebar>
+      <AllRecommendationsModal isOpen={showAllRecommendations}>
+        <CloseButtonContainer>
+          <CloseButton onClick={() => setShowAllRecommendations(false)}>×</CloseButton>
+        </CloseButtonContainer>
+        <h3>Все рекомендации</h3>
+        <AllRecommendationsTableWrapper>
+          <AllRecommendationsTable>
+            <thead>
+              <tr>
+                <TableHeader onClick={() => handleSortAllRecommendations('name')}>
+                  Предмет {sortDirection['name'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('price')}>
+                  Текущая цена {sortDirection['price'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('predictedPrice')}>
+                  Прогноз цены {sortDirection['predictedPrice'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('change')}>
+                  Изменение {sortDirection['change'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader>Рекомендация</TableHeader>
+              </tr>
+            </thead>
+            <tbody>
+              {allRecommendations.map((item, index) => (
+                <TableRow key={index}>
+                  <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
+                  <TableCell>{convertPrice(item.steam_price)}</TableCell>
+                  <TableCell>{item.predictedPrice}</TableCell>
+                  <TableCell>
+                    <TrendIcon isUp={item.overallChange > 0}>
+                      {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
+                    </TrendIcon>
+                  </TableCell>
+                  <RecommendationCell>
+                    <RecommendationText isUp={item.overallChange > 0}>
+                      {getRecommendationText(item.overallChange)}
+                    </RecommendationText>
+                    </RecommendationCell>
+                  </TableRow>
+                ))}
+              </tbody>
+            </AllRecommendationsTable>
+          </AllRecommendationsTableWrapper>
+        </AllRecommendationsModal>
+      </DashboardContainer>
+    );
+  };
 
-export default Dashboard;
+  export default Dashboard;

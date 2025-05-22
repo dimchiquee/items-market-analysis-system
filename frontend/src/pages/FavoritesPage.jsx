@@ -289,12 +289,45 @@ const RecommendationTable = styled.table`
   font-size: 0.9rem;
 `;
 
+const AllRecommendationsModal = styled.div`
+  position: fixed;
+  top: 60px;
+  left: 0;
+  width: 80%;
+  max-width: 1200px;
+  height: calc(100vh - 60px);
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  overflow-y: auto;
+  padding: 1rem;
+  transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(-100%)')};
+  transition: transform 0.3s ease;
+  margin: 0 auto;
+`;
+
+const AllRecommendationsTableWrapper = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
+const AllRecommendationsTable = styled.table`
+  width: 100%;
+  min-width: 800px;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+`;
+
 const TableHeader = styled.th`
   padding: 0.5rem;
   background-color: #f5f5f5;
   border-bottom: 1px solid #ddd;
   text-align: left;
   font-weight: bold;
+  cursor: pointer;
+  &:hover {
+    background-color: #e5e5e5;
+  }
 `;
 
 const TableRow = styled.tr`
@@ -344,8 +377,11 @@ const FavoritesPage = () => {
   const [itemHistory, setItemHistory] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [recommendations, setRecommendations] = useState({ favorites: [] });
+  const [allRecommendations, setAllRecommendations] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false);
+  const [sortDirection, setSortDirection] = useState({});
   const chartRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -446,6 +482,7 @@ const FavoritesPage = () => {
   const updateRecommendations = async () => {
     setIsUpdating(true);
     const newRecommendations = { favorites: [] };
+    const newAllRecommendations = [];
 
     const favoritesPromises = favorites.map(async (item) => {
       let pred = getCachedPrediction(item.appid, item.market_hash_name, 7);
@@ -453,12 +490,14 @@ const FavoritesPage = () => {
       const steamPrice = await fetchPriceForItem(item.appid, item.market_hash_name);
       if (pred && pred.predictions.length > 0 && steamPrice !== 'N/A') {
         const lastPred = pred.predictions[pred.predictions.length - 1];
-        return {
+        const recommendation = {
           ...item,
           steam_price: steamPrice,
           predictedPrice: lastPred.predicted_price,
           overallChange: calculateOverallChange(steamPrice, lastPred.predicted_price),
         };
+        newAllRecommendations.push(recommendation);
+        return recommendation;
       }
       return null;
     });
@@ -477,6 +516,7 @@ const FavoritesPage = () => {
     newRecommendations.favorites = [...recommendedItems, ...notRecommendedItems];
 
     setRecommendations(newRecommendations);
+    setAllRecommendations(newAllRecommendations);
     setLastUpdate(new Date().toLocaleString('en-GB', { timeZone: 'Europe/Paris' }));
     setIsUpdating(false);
   };
@@ -486,6 +526,44 @@ const FavoritesPage = () => {
     const predictedPriceNumeric = parseFloat(predictedPrice.replace(/[^0-9.]/g, '')) || 0;
     if (currentPriceNumeric === 0) return 0;
     return ((predictedPriceNumeric - currentPriceNumeric) / currentPriceNumeric) * 100;
+  };
+
+  const handleSortAllRecommendations = (type) => {
+    const currentDirection = sortDirection[type] || 'asc';
+    const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+
+    let sorted = [...allRecommendations];
+    setSortDirection(prev => ({ ...prev, [type]: newDirection }));
+
+    switch (type) {
+      case 'price':
+        sorted.sort((a, b) => {
+          const priceA = parseFloat(a.steam_price.replace(/[^0-9.]/g, '')) || 0;
+          const priceB = parseFloat(b.steam_price.replace(/[^0-9.]/g, '')) || 0;
+          return newDirection === 'asc' ? priceA - priceB : priceB - priceA;
+        });
+        break;
+      case 'name':
+        sorted.sort((a, b) => {
+          return newDirection === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+        });
+        break;
+      case 'predictedPrice':
+        sorted.sort((a, b) => {
+          const priceA = parseFloat(a.predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+          const priceB = parseFloat(b.predictedPrice.replace(/[^0-9.]/g, '')) || 0;
+          return newDirection === 'asc' ? priceA - priceB : priceB - priceA;
+        });
+        break;
+      case 'change':
+        sorted.sort((a, b) => {
+          return newDirection === 'asc' ? (a.overallChange || 0) - (b.overallChange || 0) : (b.overallChange || 0) - (a.overallChange || 0);
+        });
+        break;
+      default:
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    setAllRecommendations(sorted);
   };
 
   useEffect(() => {
@@ -936,6 +1014,7 @@ const FavoritesPage = () => {
             </SidebarButton>
             {lastUpdate && <UpdateTimestamp>Обновлено: {lastUpdate}</UpdateTimestamp>}
           </div>
+          <SidebarButton onClick={() => setShowAllRecommendations(true)}>Все рекомендации</SidebarButton>
         </SidebarHeader>
         <RecommendationSection>
           <h3>Рекомендации по избранным (на 1 неделю)</h3>
@@ -975,6 +1054,52 @@ const FavoritesPage = () => {
           )}
         </RecommendationSection>
       </Sidebar>
+      <AllRecommendationsModal isOpen={showAllRecommendations}>
+        <CloseButtonContainer>
+          <CloseButton onClick={() => setShowAllRecommendations(false)}>×</CloseButton>
+        </CloseButtonContainer>
+        <h3>Все рекомендации</h3>
+        <AllRecommendationsTableWrapper>
+          <AllRecommendationsTable>
+            <thead>
+              <tr>
+                <TableHeader onClick={() => handleSortAllRecommendations('name')}>
+                  Предмет {sortDirection['name'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('price')}>
+                  Текущая цена {sortDirection['price'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('predictedPrice')}>
+                  Прогноз цены {sortDirection['predictedPrice'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader onClick={() => handleSortAllRecommendations('change')}>
+                  Изменение {sortDirection['change'] === 'asc' ? '↑' : '↓'}
+                </TableHeader>
+                <TableHeader>Рекомендация</TableHeader>
+              </tr>
+            </thead>
+            <tbody>
+              {allRecommendations.map((item, index) => (
+                <TableRow key={index}>
+                  <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
+                  <TableCell>{convertPrice(item.steam_price)}</TableCell>
+                  <TableCell>{item.predictedPrice}</TableCell>
+                  <TableCell>
+                    <TrendIcon isUp={item.overallChange > 0}>
+                      {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
+                    </TrendIcon>
+                  </TableCell>
+                  <RecommendationCell>
+                    <RecommendationText isUp={item.overallChange > 0}>
+                      {getRecommendationText(item.overallChange)}
+                    </RecommendationText>
+                  </RecommendationCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </AllRecommendationsTable>
+        </AllRecommendationsTableWrapper>
+      </AllRecommendationsModal>
     </FavoritesPageContainer>
   );
 };
