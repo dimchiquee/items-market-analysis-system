@@ -232,7 +232,7 @@ const RecommendationSidebar = styled.div`
   position: fixed;
   top: 60px;
   right: 0;
-  width: 400px;
+  min-width: 600px;
   height: calc(100vh - 60px);
   background-color: #fff;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
@@ -901,7 +901,7 @@ const Dashboard = () => {
       setRecommendationProgress(currentProgress);
 
       const remainingItems = totalItems - (i + 1);
-      setRemainingTimeMin(Math.ceil((remainingItems * delayMs) / 60000));
+      setRemainingTimeMin(Math.ceil((remainingItems * delayMs) / 600));
 
       if (wasRequestMade && i < totalItems - 1) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -1519,7 +1519,7 @@ const Dashboard = () => {
             {lastUpdate && <UpdateTimestamp>Обновлено: {new Date(lastUpdate).toLocaleString()}</UpdateTimestamp>}
             {isUpdating && (
               <ProgressText>
-                Обработка: {Math.round(recommendationProgress)}% (примерно {estimatedTimeMin} мин, осталось {remainingTimeMin} мин)
+                Обработка: {Math.round(recommendationProgress)}% (примерно {estimatedTimeMin} мин, осталось {remainingTimeMin} сек)
               </ProgressText>
             )}
           </div>
