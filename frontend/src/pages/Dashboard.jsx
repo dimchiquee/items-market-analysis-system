@@ -917,12 +917,24 @@ const Dashboard = () => {
       .sort((a, b) => a.overallChange - b.overallChange)
       .slice(0, 5);
 
-    setRecommendations({ inventory: [...recommendedItems, ...notRecommendedItems] });
+    const newRecommendations = { inventory: [...recommendedItems, ...notRecommendedItems] };
+    const updateTime = new Date();
+    setRecommendations(newRecommendations);
     setAllRecommendations(newAllRecommendations);
-    setLastUpdate(new Date());
+    setLastUpdate(updateTime);
     setRecommendationProgress(100);
     setRemainingTimeMin(0);
     setIsUpdating(false);
+
+    try {
+      await axios.post('http://localhost:8000/auth/recommendations', {
+        recommendations: newRecommendations,
+        allRecommendations: newAllRecommendations,
+        timestamp: updateTime.toISOString()
+      }, { params: { token: localStorage.getItem('auth_token') } });
+    } catch (error) {
+      console.error('Failed to save recommendations:', error.response ? error.response.data : error.message);
+    }
   };
 
   const calculateOverallChange = (steamPrice, predictedPrice) => {
@@ -1018,6 +1030,17 @@ const Dashboard = () => {
     axios.get('http://localhost:8000/auth/verify', { params: { token } })
       .then(response => {
         setUser(response.data);
+        const fetchCachedRecommendations = async () => {
+          try {
+            const response = await axios.get('http://localhost:8000/auth/recommendations', { params: { token } });
+            setRecommendations(response.data.recommendations || { inventory: [] });
+            setAllRecommendations(response.data.allRecommendations || []);
+            setLastUpdate(response.data.timestamp ? new Date(response.data.timestamp) : null);
+          } catch (error) {
+            console.error('No cached recommendations or error:', error.response ? error.response.data : error.message);
+          }
+        };
+        fetchCachedRecommendations();
       })
       .catch(error => {
         console.error('Error:', error);
@@ -1195,7 +1218,7 @@ const Dashboard = () => {
     }
 
     if (hasChanged) {
-      setFilteredInventory(sorted);
+
     }
   };
 
@@ -1346,10 +1369,12 @@ const Dashboard = () => {
         resetSorting={resetSorting}
       />
       <MainContent isRecommendationSidebarOpen={isRecommendationSidebarOpen}>
-        <HeaderContainer>
-          <h1>Ваш инвентарь</h1>
-          <SidebarButton onClick={() => setIsRecommendationSidebarOpen(true)}>Рекомендации</SidebarButton>
-        </HeaderContainer>
+<HeaderContainer>
+  <h1>Ваш инвентарь</h1>
+  {filters.game && (
+    <SidebarButton onClick={() => setIsRecommendationSidebarOpen(true)}>Рекомендации</SidebarButton>
+  )}
+</HeaderContainer>
         {!filters.game && !loading ? (
           <p>Выберите игру в боковой панели</p>
         ) : loading ? (

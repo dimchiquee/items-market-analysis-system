@@ -9,7 +9,7 @@ from urllib.parse import urlencode, quote
 import logging
 import json
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -93,7 +93,15 @@ def init_db():
             schema_data TEXT NOT NULL
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS recommendations_cache (
+            steam_id TEXT PRIMARY KEY,
+            recommendations_data TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_recommendations_steam_id ON recommendations_cache(steam_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_cache_key ON price_cache(cache_key)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_history_cache_key ON history_cache(cache_key)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_popular_items_cache_key ON popular_items_cache(cache_key)")
@@ -208,6 +216,32 @@ price_cache = load_price_cache()
 history_cache = load_history_cache()
 popular_items_cache = load_popular_items_cache()
 
+
+def load_recommendations_cache(steam_id: str) -> Optional[Dict]:
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT recommendations_data, timestamp FROM recommendations_cache WHERE steam_id = ?", (steam_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        data = json.loads(row[0])
+        timestamp = datetime.fromisoformat(row[1])
+        cache_age_hours = (datetime.now() - timestamp).total_seconds() / 3600
+        if cache_age_hours < 24:  # Cache valid for 24 hours
+            return data
+    return None
+
+
+def save_recommendations_cache(steam_id: str, recommendations_data: Dict):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO recommendations_cache (steam_id, recommendations_data, timestamp)
+        VALUES (?, ?, ?)
+    """, (steam_id, json.dumps(recommendations_data), datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
 
 def fetch_item_schema(appid: str) -> List[Dict[str, Any]]:
     conn = sqlite3.connect(DATABASE)
@@ -796,13 +830,14 @@ async def reset_cache(token: str):
         cursor.execute("DELETE FROM price_cache")
         cursor.execute("DELETE FROM history_cache")
         cursor.execute("DELETE FROM popular_items_cache")
+        cursor.execute("DELETE FROM recommendations_cache")
         conn.commit()
         conn.close()
 
         price_cache.clear()
         history_cache.clear()
         popular_items_cache.clear()
-        logger.info("Server price, history, and popular items cache cleared")
+        logger.info("Server price, history, popular items, and recommendations cache cleared")
         return {"message": "Cache cleared"}
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -889,6 +924,7 @@ async def get_popular_items(appid: str, force_refresh: bool = False):
         if force_refresh:
             time.sleep(2)
         url = f"https://steamcommunity.com/market/search/render/?appid={appid}&norender=1&count=100"
+        # Добавляем &start=100 в запрос для изменения раздела популярное как временное решение
         response = session.get(url, timeout=10)
         logger.debug(f"Popular items response: {response.status_code} - {response.text[:200]}")
 
@@ -1213,3 +1249,41 @@ async def predict_price_endpoint(token: str, market_hash_name: str, appid: str, 
     except Exception as e:
         logger.error(f"Failed to predict price: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to predict price: {str(e)}")
+
+
+@router.get("/recommendations")
+async def get_recommendations(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        steam_id = payload.get('steam_id')
+        if not steam_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        cached_data = load_recommendations_cache(steam_id)
+        if cached_data:
+            logger.debug(f"Returning cached recommendations for steam_id {steam_id}")
+            return cached_data
+
+        raise HTTPException(status_code=404, detail="No cached recommendations found. Please generate recommendations first.")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to retrieve recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve recommendations: {str(e)}")
+
+@router.post("/recommendations")
+async def save_recommendations(token: str, recommendations_data: Dict):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        steam_id = payload.get('steam_id')
+        if not steam_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        save_recommendations_cache(steam_id, recommendations_data)
+        logger.info(f"Recommendations cached for {steam_id}")
+        return {"status": "Recommendations saved successfully"}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        logger.error(f"Failed to save recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save recommendations: {str(e)}")
