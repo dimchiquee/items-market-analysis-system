@@ -408,7 +408,7 @@ const Dashboard = () => {
   const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
   const [resetSorting, setResetSorting] = useState(false);
   const [isRecommendationSidebarOpen, setIsRecommendationSidebarOpen] = useState(false);
-  const [recommendations, setRecommendations] = useState({ inventory: [] });
+  const [recommendations, setRecommendations] = useState({ inventory: [], favorites: [] });
   const [allRecommendations, setAllRecommendations] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -1218,7 +1218,7 @@ const Dashboard = () => {
     }
 
     if (hasChanged) {
-
+    setFilteredInventory(sorted);
     }
   };
 

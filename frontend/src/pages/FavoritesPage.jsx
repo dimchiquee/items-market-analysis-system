@@ -376,7 +376,7 @@ const FavoritesPage = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [itemHistory, setItemHistory] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [recommendations, setRecommendations] = useState({ favorites: [] });
+  const [recommendations, setRecommendations] = useState({ inventory: [], favorites: [] });
   const [allRecommendations, setAllRecommendations] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
