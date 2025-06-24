@@ -7,6 +7,7 @@ import PopularPage from './pages/PopularPage';
 import SearchPage from './pages/SearchPage';
 import FavoritesPage from './pages/FavoritesPage';
 import { useEffect, useState } from 'react';
+import GlobalStyle from './globalStyles.jsx';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('auth_token'));
@@ -17,16 +18,19 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" />} />
-        <Route path="/callback" element={<Callback setIsAuthenticated={setIsAuthenticated} />} />
-        <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/" />} />
-        <Route path="/popular" element={<PopularPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/favorites" element={isAuthenticated ? <FavoritesPage /> : <Navigate to="/" />} />
-      </Routes>
-    </Router>
+    <>
+      <GlobalStyle />
+      <Router>
+        <Routes>
+          <Route path="/" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" />} />
+          <Route path="/callback" element={<Callback setIsAuthenticated={setIsAuthenticated} />} />
+          <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/" />} />
+          <Route path="/popular" element={<PopularPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/favorites" element={isAuthenticated ? <FavoritesPage /> : <Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </>
   );
 }
 

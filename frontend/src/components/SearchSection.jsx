@@ -9,21 +9,31 @@ const SearchSectionContainer = styled.div`
 const SectionTitle = styled.h2`
   font-size: 1.5rem;
   margin-bottom: 1rem;
+  color: #E0E0E0;
 `;
 
 const SearchForm = styled.div`
   display: flex;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   align-items: center;
 `;
 
 const SearchInput = styled.input`
-  padding: 0.5rem;
+  padding: 0.75rem 1rem;
   font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid #4A475C;
+  background-color: #282633;
+  color: #E0E0E0;
+  border-radius: 8px;
   width: 300px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
+  }
 `;
 
 const GameSelector = styled.div`
@@ -32,29 +42,35 @@ const GameSelector = styled.div`
 `;
 
 const GameButton = styled.button`
-  background-color: ${props => (props.active ? '#66c0f4' : '#2a475e')};
+  background-color: ${props => (props.active ? '#7C3AED' : 'transparent')};
   color: #fff;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  border: 1px solid #4A475C;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+
   &:hover {
-    background-color: ${props => (props.active ? '#8ed1ff' : '#3b5a77')};
+    border-color: #7C3AED;
   }
 `;
 
 const SearchButton = styled.button`
-  background-color: #66c0f4;
+  background-color: #7C3AED;
   color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+
   &:hover {
-    background-color: #8ed1ff;
+    background-color: #8B5CF6;
   }
   &:disabled {
-    background-color: #cccccc;
+    background-color: #4A475C;
     cursor: not-allowed;
   }
 `;
@@ -62,25 +78,31 @@ const SearchButton = styled.button`
 const SearchGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: 1.5rem;
 `;
 
 const SearchCard = styled.div`
-  background-color: #fff;
-  padding: 1rem;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: #282633;
+  border-radius: 8px;
+  border: 1px solid #4A475C;
   text-align: center;
   text-decoration: none;
   color: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   &:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2);
   }
 `;
 
 const ItemLink = styled.a`
   text-decoration: none;
   color: inherit;
+  padding: 1rem;
+  flex-grow: 1;
 `;
 
 const ItemImage = styled.img`
@@ -92,51 +114,56 @@ const ItemImage = styled.img`
 const ItemName = styled.p`
   margin: 0.5rem 0;
   font-size: 1rem;
+  color: #E0E0E0;
+  font-weight: 500;
 `;
 
 const ItemPrice = styled.p`
   margin: 0;
-  color: #666;
+  color: #9CA3AF;
 `;
 
 const AddToFavoritesButton = styled.button`
-  background-color: #66c0f4;
+  background-color: #7C3AED;
   color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
   cursor: pointer;
-  margin-top: 0.5rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+  width: 100%;
+
   &:hover {
-    background-color: #8ed1ff;
+    background-color: #8B5CF6;
   }
   &:disabled {
-    background-color: #cccccc;
+    background-color: #4A475C;
+    color: #9CA3AF;
     cursor: not-allowed;
   }
 `;
 
 const Message = styled.div`
   padding: 0.5rem;
-  background-color: ${props => props.success ? '#ccffcc' : '#ffcccc'};
-  border-radius: 4px;
-  color: ${props => props.success ? '#008000' : '#d8000c'};
+  background-color: ${props => props.success ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'};
+  border-radius: 8px;
+  color: ${props => props.success ? '#22C55E' : '#F87171'};
+  border: 1px solid ${props => props.success ? '#22C55E' : '#EF4444'};
   text-align: center;
-  margin-top: 0.5rem;
+  margin: 1rem;
 `;
 
-const ErrorMessage = styled.div`
-  padding: 1rem;
-  background-color: #ffcccc;
-  border-radius: 4px;
-  color: #d8000c;
-  text-align: center;
+const ErrorMessage = styled(Message)`
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+  border: 1px solid #EF4444;
 `;
 
 const NoResultsMessage = styled.div`
   padding: 1rem;
-  color: #666;
+  color: #9CA3AF;
   text-align: center;
+  font-style: italic;
 `;
 
 const SearchSection = ({ currency }) => {

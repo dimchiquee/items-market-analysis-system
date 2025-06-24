@@ -6,14 +6,16 @@ const NavbarContainer = styled.nav`
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 1rem 2rem;
-  background-color: #171a21;
-  color: #fff;
+  height: 60px;
+  padding: 0 2rem;
+  background-color: #282633;
+  color: #E0E0E0;
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 1000;
+  z-index: 1001; /* Higher than sidebar */
   box-sizing: border-box;
+  border-bottom: 1px solid #4A475C;
 `;
 
 const NavLinks = styled.div`
@@ -22,11 +24,13 @@ const NavLinks = styled.div`
 `;
 
 const NavLink = styled.a`
-  color: #fff;
+  color: #E0E0E0;
   text-decoration: none;
   font-size: 1.1rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
   &:hover {
-    color: #66c0f4;
+    color: #7C3AED;
   }
 `;
 
@@ -34,11 +38,11 @@ const UserInfo = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
-  max-width: 300px;
 `;
 
 const Username = styled.span`
   white-space: nowrap;
+  font-weight: 500;
 `;
 
 const Avatar = styled.img`
@@ -46,29 +50,34 @@ const Avatar = styled.img`
   height: 40px;
   border-radius: 50%;
   flex-shrink: 0;
+  border: 2px solid #4A475C;
 `;
 
 const LogoutButton = styled.button`
-  background-color: #171a25;
-  color: #fff;
-  border: none;
+  background-color: transparent;
+  color: #EF4444;
+  border: 1px solid #EF4444;
   padding: 0.5rem 1rem;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease, color 0.2s ease;
   &:hover {
-    background-color: #ff3333;
+    background-color: #EF4444;
+    color: #fff;
   }
 `;
 
 const CurrencySelect = styled.select`
   padding: 0.5rem;
-  border-radius: 4px;
-  border: none;
-  background-color: #2a2a2a;
-  color: #fff;
+  border-radius: 8px;
+  border: 1px solid #4A475C;
+  background-color: #323040;
+  color: #E0E0E0;
   cursor: pointer;
   &:focus {
     outline: none;
+    border-color: #7C3AED;
   }
 `;
 

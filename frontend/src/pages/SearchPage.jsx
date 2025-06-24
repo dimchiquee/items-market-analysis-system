@@ -13,7 +13,7 @@ const SearchPageContainer = styled.div`
 const MainContent = styled.div`
   flex-grow: 1;
   padding: 2rem;
-  background-color: #f0f0f0;
+  background-color: #323040;
 `;
 
 const SearchPage = () => {

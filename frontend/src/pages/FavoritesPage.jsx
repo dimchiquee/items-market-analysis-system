@@ -10,16 +10,20 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const FavoritesPageContainer = styled.div`
   display: flex;
   min-height: 100vh;
-  padding-top: 60px;
+  padding-top: 50px;
   position: relative;
 `;
 
 const MainContent = styled.div`
   flex-grow: 1;
   padding: 2rem;
-  background-color: #f0f0f0;
+  background-color: #323040;
   transition: margin-right 0.3s ease;
   margin-right: ${props => props.isSidebarOpen ? '400px' : '0'};
+  color: #E0E0E0;
+  h1, h3 {
+    color: #E0E0E0;
+  }
 `;
 
 const HeaderContainer = styled.div`
@@ -32,19 +36,21 @@ const HeaderContainer = styled.div`
 const FavoritesGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: 1.5rem;
 `;
 
 const FavoriteCard = styled.div`
-  background-color: #fff;
+  background-color: #282633;
   padding: 1rem;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  border: 1px solid #4A475C;
   text-align: center;
   cursor: pointer;
   position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   &:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2);
   }
 `;
 
@@ -57,20 +63,29 @@ const ItemImage = styled.img`
 const ItemName = styled.p`
   margin: 0.5rem 0;
   font-size: 1rem;
+  color: #E0E0E0;
+  font-weight: 500;
 `;
 
 const RemoveButton = styled.button`
   position: absolute;
-  top: 5px;
-  right: 5px;
-  background-color: #d8000c;
-  color: #fff;
-  border: none;
+  top: 10px;
+  right: 10px;
+  background-color: transparent;
+  color: #EF4444;
+  border: 1px solid #EF4444;
   padding: 0.3rem 0.6rem;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: bold;
+  &::before {
+    font-size: 1.5rem;
+    line-height: 1;
+  }
   &:hover {
-    background-color: #ff3333;
+    background-color: #EF4444;
+    color: #fff;
   }
 `;
 
@@ -80,7 +95,7 @@ const ModalOverlay = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(17, 24, 39, 0.8);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -89,7 +104,8 @@ const ModalOverlay = styled.div`
 `;
 
 const ModalContent = styled.div`
-  background: #fff;
+  background: #323040;
+  color: #E0E0E0;
   padding: 2rem;
   border-radius: 8px;
   width: 700px;
@@ -100,25 +116,17 @@ const ModalContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  border: 1px solid #4A475C;
 `;
 
-const PredictModalContent = styled.div`
-  background: #fff;
-  padding: 2rem;
-  border-radius: 8px;
+const PredictModalContent = styled(ModalContent)`
   width: 500px;
-  max-width: 95%;
-  max-height: 90vh;
-  overflow-y: auto;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
   gap: 1rem;
 `;
 
 const ItemInfoContainer = styled.div`
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   align-items: center;
   @media (max-width: 600px) {
     flex-direction: column;
@@ -135,9 +143,16 @@ const PriceWrapper = styled.div`
   text-align: left;
 `;
 
+const PriceText = styled.p`
+  margin: 0.5rem 0;
+  font-size: 1.1rem;
+  color: ${props => (props.isLowest ? '#22C55E' : 'inherit')};
+  font-weight: ${props => (props.isLowest ? 'bold' : 'normal')};
+`;
+
 const ChartButtonContainer = styled.div`
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   align-items: stretch;
   @media (max-width: 600px) {
     flex-direction: column;
@@ -149,7 +164,9 @@ const ChartContainer = styled.div`
   flex: 1;
   height: 250px;
   position: relative;
-  background-color: #f0f0f0;
+  background-color: #282633;
+  border-radius: 8px;
+  padding: 1rem;
   canvas {
     max-height: 100% !important;
     max-width: 100% !important;
@@ -160,43 +177,48 @@ const ButtonContainer = styled.div`
   flex: 0 0 150px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   justify-content: center;
 `;
 
 const ModalButton = styled.button`
-  background-color: ${props => props.primary ? '#66c0f4' : '#d8000c'};
+  background-color: ${props => props.primary ? '#7C3AED' : '#EF4444'};
   color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
   cursor: pointer;
   width: 100%;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
   &:hover {
-    background-color: ${props => props.primary ? '#8ed1ff' : '#ff3333'};
+    background-color: ${props => props.primary ? '#8B5CF6' : '#F87171'};
   }
 `;
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   justify-content: center;
 `;
 
 const HorizonInput = styled.input`
   margin-left: 0.5rem;
   padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 8px;
   width: 60px;
+  background-color: #282633;
+  color: #E0E0E0;
+  border: 1px solid #4A475C;
 `;
 
 const PredictionResult = styled.div`
   margin-top: 1rem;
   padding: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid #4A475C;
+  border-radius: 8px;
   text-align: left;
+  background-color: #282633;
 `;
 
 const PredictionList = styled.ul`
@@ -211,9 +233,10 @@ const PredictionItem = styled.li`
 
 const ErrorMessage = styled.div`
   padding: 1rem;
-  background-color: #ffcccc;
-  border-radius: 4px;
-  color: #d8000c;
+  background-color: rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #F87171;
+  border: 1px solid #EF4444;
   text-align: center;
 `;
 
@@ -223,47 +246,52 @@ const Sidebar = styled.div`
   right: 0;
   width: 600px;
   height: calc(100vh - 60px);
-  background-color: #fff;
-  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  background-color: #282633;
+  color: #E0E0E0;
+  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.25);
   transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(100%)')};
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease-in-out;
   z-index: 1000;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1.5rem;
 `;
 
 const SidebarHeader = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 `;
 
 const CloseButtonContainer = styled.div`
   display: flex;
   width: 100%;
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 `;
 
 const SidebarButton = styled.button`
-  background-color: #66c0f4;
+  background-color: #7C3AED;
   color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
   &:hover {
-    background-color: #8ed1ff;
+    background-color: #8B5CF6;
   }
   &:disabled {
-    background-color: #cccccc;
+    background-color: #4A475C;
+    color: #9CA3AF;
     cursor: not-allowed;
   }
 `;
 
 const UpdateTimestamp = styled.span`
   font-size: 0.9rem;
-  color: #555;
+  color: #9CA3AF;
   display: block;
   margin-top: 0.5rem;
 `;
@@ -273,9 +301,10 @@ const CloseButton = styled.button`
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #d8000c;
+  color: #EF4444;
+  transition: color 0.2s ease;
   &:hover {
-    color: #ff3333;
+    color: #F87171;
   }
 `;
 
@@ -289,56 +318,43 @@ const RecommendationTable = styled.table`
   font-size: 0.9rem;
 `;
 
-const AllRecommendationsModal = styled.div`
-  position: fixed;
-  top: 60px;
-  left: 0;
-  width: 80%;
-  max-width: 1200px;
-  height: calc(100vh - 60px);
-  background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  z-index: 2000;
-  overflow-y: auto;
-  padding: 1rem;
-  transform: ${props => (props.isOpen ? 'translateX(0)' : 'translateX(-100%)')};
-  transition: transform 0.3s ease;
-  margin: 0 auto;
-`;
+const AllRecommendationsModal = styled(ModalOverlay)``;
 
 const AllRecommendationsTableWrapper = styled.div`
   width: 100%;
   overflow-x: auto;
+  background: #323040;
+  padding: 1rem;
+  border-radius: 8px;
+  color: #E0E0E0;
 `;
 
-const AllRecommendationsTable = styled.table`
-  width: 100%;
-  min-width: 800px;
-  border-collapse: collapse;
-  font-size: 0.9rem;
+const AllRecommendationsTable = styled(RecommendationTable)`
+    min-width: 800px;
 `;
 
 const TableHeader = styled.th`
-  padding: 0.5rem;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #ddd;
+  padding: 0.75rem;
+  background-color: #323040;
+  border-bottom: 1px solid #4A475C;
   text-align: left;
   font-weight: bold;
   cursor: pointer;
   &:hover {
-    background-color: #e5e5e5;
+    background-color: #4A475C;
   }
 `;
 
 const TableRow = styled.tr`
+  transition: background-color 0.2s ease;
   &:hover {
-    background-color: #f9f9f9;
+    background-color: #3a384a;
   }
 `;
 
 const TableCell = styled.td`
-  padding: 0.5rem;
-  border-bottom: 1px solid #eee;
+  padding: 0.75rem;
+  border-bottom: 1px solid #4A475C;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -355,12 +371,12 @@ const RecommendationCell = styled(TableCell)`
 `;
 
 const TrendIcon = styled.span`
-  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+  color: ${props => (props.isUp ? '#22C55E' : '#EF4444')};
 `;
 
 const RecommendationText = styled.span`
   font-weight: ${props => (props.isUp ? 'bold' : 'normal')};
-  color: ${props => (props.isUp ? '#008000' : '#d8000c')};
+  color: ${props => (props.isUp ? '#22C55E' : '#EF4444')};
 `;
 
 const FavoritesPage = () => {
@@ -517,7 +533,7 @@ const FavoritesPage = () => {
 
     setRecommendations(newRecommendations);
     setAllRecommendations(newAllRecommendations);
-    setLastUpdate(new Date().toLocaleString('en-GB', { timeZone: 'Europe/Paris' }));
+    setLastUpdate(new Date());
     setIsUpdating(false);
   };
 
@@ -842,7 +858,7 @@ const FavoritesPage = () => {
       label: `Цена (${currency === '¥JPY' ? '¥ (JPY)' : currency === '¥CNY' ? '¥ (CNY)' : currency})`,
       data: itemHistory.map(data => parseFloat(data[1])),
       fill: false,
-      borderColor: '#66c0f4',
+      borderColor: '#8B5CF6',
       tension: 0.1
     }]
   } : null;
@@ -850,19 +866,36 @@ const FavoritesPage = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            labels: {
+                color: '#E0E0E0'
+            }
+        }
+    },
     scales: {
       x: {
-        title: { display: true, text: 'Дата' },
+        title: { display: true, text: 'Дата', color: '#9CA3AF' },
         ticks: {
+          color: '#9CA3AF',
           maxTicksLimit: 8,
           maxRotation: 45,
           minRotation: 45
+        },
+        grid: {
+          color: '#4A475C'
         },
         min: chartState.xMin,
         max: chartState.xMax
       },
       y: {
-        title: { display: true, text: `Цена (${currency === '¥JPY' ? '¥ (JPY)' : currency === '¥CNY' ? '¥ (CNY)' : currency})` },
+        title: { display: true, text: `Цена (${currency === '¥JPY' ? '¥ (JPY)' : currency === '¥CNY' ? '¥ (CNY)' : currency})`, color: '#9CA3AF' },
+        ticks: {
+            color: '#9CA3AF'
+        },
+        grid: {
+          color: '#4A475C'
+        },
         min: chartState.yMin,
         max: chartState.yMax
       }
@@ -898,61 +931,88 @@ const FavoritesPage = () => {
             ))}
           </FavoritesGrid>
         )}
-        {selectedItem && (
-          <ModalOverlay onClick={closeModal}>
-            <ModalContent onClick={(e) => e.stopPropagation()}>
-              <h2>{selectedItem.name}</h2>
-              <ItemInfoContainer>
-                <ImageWrapper>
-                  <ItemImage src={selectedItem.icon_url} alt={selectedItem.name} />
-                </ImageWrapper>
-                <PriceWrapper>
-                  <div>
-                    <p>Steam: {convertPrice(selectedItem.steam_price)}</p>
-                    {selectedItem.appid === '730' ? (
-                      <>
-                        <p>Market.CSGO: {convertPrice(selectedItem.market_csgo_price)}</p>
-                        <p>Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p>Market.Dota2: {convertPrice(selectedItem.market_dota2_price)}</p>
-                        <p>Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}</p>
-                      </>
+        {selectedItem && (() => {
+          const getNumericPrice = (priceString) => {
+            if (!priceString || typeof priceString !== 'string' || priceString === 'N/A' || priceString === 'Загрузка...') {
+              return Infinity;
+            }
+            const numericValue = parseFloat(priceString.replace(/[^0-9.]/g, ''));
+            return isNaN(numericValue) ? Infinity : numericValue;
+          };
+
+          const steamPriceNum = getNumericPrice(selectedItem.steam_price);
+          const marketPriceNum = getNumericPrice(selectedItem.appid === '730' ? selectedItem.market_csgo_price : selectedItem.market_dota2_price);
+          const lisSkinsPriceNum = getNumericPrice(selectedItem.lis_skins_price);
+
+          const allPrices = [steamPriceNum, marketPriceNum, lisSkinsPriceNum].filter(p => p !== Infinity);
+          const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : Infinity;
+
+          return (
+            <ModalOverlay onClick={closeModal}>
+              <ModalContent onClick={(e) => e.stopPropagation()}>
+                <h2>{selectedItem.name}</h2>
+                <ItemInfoContainer>
+                  <ImageWrapper>
+                    <ItemImage src={selectedItem.icon_url} alt={selectedItem.name} />
+                  </ImageWrapper>
+                  <PriceWrapper>
+                    <div>
+                      <PriceText isLowest={steamPriceNum !== Infinity && steamPriceNum === minPrice}>
+                        Steam: {convertPrice(selectedItem.steam_price)}
+                      </PriceText>
+                      {selectedItem.appid === '730' ? (
+                        <>
+                          <PriceText isLowest={marketPriceNum !== Infinity && marketPriceNum === minPrice}>
+                            Market.CSGO: {convertPrice(selectedItem.market_csgo_price)}
+                          </PriceText>
+                          <PriceText isLowest={lisSkinsPriceNum !== Infinity && lisSkinsPriceNum === minPrice}>
+                            Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}
+                          </PriceText>
+                        </>
+                      ) : (
+                        <>
+                          <PriceText isLowest={marketPriceNum !== Infinity && marketPriceNum === minPrice}>
+                            Market.Dota2: {convertPrice(selectedItem.market_dota2_price)}
+                          </PriceText>
+                          <PriceText isLowest={lisSkinsPriceNum !== Infinity && lisSkinsPriceNum === minPrice}>
+                            Lis-Skins: {convertPrice(selectedItem.lis_skins_price)}
+                          </PriceText>
+                        </>
+                      )}
+                    </div>
+                  </PriceWrapper>
+                </ItemInfoContainer>
+                <ChartButtonContainer>
+                  <ChartContainer>
+                    {chartData && (
+                      <Line
+                        ref={chartRef}
+                        data={chartData}
+                        options={chartOptions}
+                        onWheel={handleChartWheel}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                      />
                     )}
-                  </div>
-                </PriceWrapper>
-              </ItemInfoContainer>
-              <ChartButtonContainer>
-                <ChartContainer>
-                  {chartData && (
-                    <Line
-                      ref={chartRef}
-                      data={chartData}
-                      options={chartOptions}
-                      onWheel={handleChartWheel}
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      onMouseLeave={handleMouseUp}
-                    />
-                  )}
-                </ChartContainer>
-                <ButtonContainer>
-                  <ModalButton onClick={() => fetchHistory(selectedItem)}>
-                    {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
-                  </ModalButton>
-                  <ModalButton onClick={() => predictPrice(selectedItem)}>
-                    Прогноз цены
-                  </ModalButton>
-                  <ModalButton onClick={closeModal}>
-                    Закрыть
-                  </ModalButton>
-                </ButtonContainer>
-              </ChartButtonContainer>
-            </ModalContent>
-          </ModalOverlay>
-        )}
+                  </ChartContainer>
+                  <ButtonContainer>
+                    <ModalButton onClick={() => fetchHistory(selectedItem)}>
+                      {historyLoading ? 'Загрузка...' : 'Загрузить историю'}
+                    </ModalButton>
+                    <ModalButton onClick={() => predictPrice(selectedItem)}>
+                      Прогноз цены
+                    </ModalButton>
+                    <ModalButton onClick={closeModal}>
+                      Закрыть
+                    </ModalButton>
+                  </ButtonContainer>
+                </ChartButtonContainer>
+              </ModalContent>
+            </ModalOverlay>
+          );
+        })()}
         {predictItem && (
           <ModalOverlay onClick={closePredictionModal}>
             <PredictModalContent onClick={(e) => e.stopPropagation()}>
@@ -1012,14 +1072,14 @@ const FavoritesPage = () => {
             <SidebarButton onClick={updateRecommendations} disabled={isUpdating}>
               {isUpdating ? 'Обновление...' : 'Обновить рекомендации'}
             </SidebarButton>
-            {lastUpdate && <UpdateTimestamp>Обновлено: {lastUpdate}</UpdateTimestamp>}
+            {lastUpdate && <UpdateTimestamp>Обновлено: {new Date(lastUpdate).toLocaleString()}</UpdateTimestamp>}
           </div>
           <SidebarButton onClick={() => setShowAllRecommendations(true)}>Все рекомендации</SidebarButton>
         </SidebarHeader>
         <RecommendationSection>
           <h3>Рекомендации по избранным (на 1 неделю)</h3>
           {recommendations.favorites.length === 0 ? (
-            <p>Рекомендации отсутствуют. Добавьте предметы в избранное.</p>
+            <p>Рекомендации отсутствуют. Добавьте предметы в избранное или обновите рекомендации.</p>
           ) : (
             <RecommendationTable>
               <thead>
@@ -1054,52 +1114,54 @@ const FavoritesPage = () => {
           )}
         </RecommendationSection>
       </Sidebar>
-      <AllRecommendationsModal isOpen={showAllRecommendations}>
-        <CloseButtonContainer>
-          <CloseButton onClick={() => setShowAllRecommendations(false)}>×</CloseButton>
-        </CloseButtonContainer>
-        <h3>Все рекомендации</h3>
-        <AllRecommendationsTableWrapper>
-          <AllRecommendationsTable>
-            <thead>
-              <tr>
-                <TableHeader onClick={() => handleSortAllRecommendations('name')}>
-                  Предмет {sortDirection['name'] === 'asc' ? '↑' : '↓'}
-                </TableHeader>
-                <TableHeader onClick={() => handleSortAllRecommendations('price')}>
-                  Текущая цена {sortDirection['price'] === 'asc' ? '↑' : '↓'}
-                </TableHeader>
-                <TableHeader onClick={() => handleSortAllRecommendations('predictedPrice')}>
-                  Прогноз цены {sortDirection['predictedPrice'] === 'asc' ? '↑' : '↓'}
-                </TableHeader>
-                <TableHeader onClick={() => handleSortAllRecommendations('change')}>
-                  Изменение {sortDirection['change'] === 'asc' ? '↑' : '↓'}
-                </TableHeader>
-                <TableHeader>Рекомендация</TableHeader>
-              </tr>
-            </thead>
-            <tbody>
-              {allRecommendations.map((item, index) => (
-                <TableRow key={index}>
-                  <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
-                  <TableCell>{convertPrice(item.steam_price)}</TableCell>
-                  <TableCell>{item.predictedPrice}</TableCell>
-                  <TableCell>
-                    <TrendIcon isUp={item.overallChange > 0}>
-                      {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
-                    </TrendIcon>
-                  </TableCell>
-                  <RecommendationCell>
-                    <RecommendationText isUp={item.overallChange > 0}>
-                      {getRecommendationText(item.overallChange)}
-                    </RecommendationText>
-                  </RecommendationCell>
-                </TableRow>
-              ))}
-            </tbody>
-          </AllRecommendationsTable>
-        </AllRecommendationsTableWrapper>
-      </AllRecommendationsModal>
+      {showAllRecommendations && (
+        <AllRecommendationsModal isOpen={showAllRecommendations}>
+            <AllRecommendationsTableWrapper>
+                <CloseButtonContainer>
+                <CloseButton onClick={() => setShowAllRecommendations(false)}>×</CloseButton>
+                </CloseButtonContainer>
+                <h3>Все рекомендации</h3>
+                <AllRecommendationsTable>
+                    <thead>
+                    <tr>
+                        <TableHeader onClick={() => handleSortAllRecommendations('name')}>
+                        Предмет {sortDirection['name'] === 'asc' ? '↑' : '↓'}
+                        </TableHeader>
+                        <TableHeader onClick={() => handleSortAllRecommendations('price')}>
+                        Текущая цена {sortDirection['price'] === 'asc' ? '↑' : '↓'}
+                        </TableHeader>
+                        <TableHeader onClick={() => handleSortAllRecommendations('predictedPrice')}>
+                        Прогноз цены {sortDirection['predictedPrice'] === 'asc' ? '↑' : '↓'}
+                        </TableHeader>
+                        <TableHeader onClick={() => handleSortAllRecommendations('change')}>
+                        Изменение {sortDirection['change'] === 'asc' ? '↑' : '↓'}
+                        </TableHeader>
+                        <TableHeader>Рекомендация</TableHeader>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {allRecommendations.map((item, index) => (
+                        <TableRow key={index}>
+                        <ItemNameCell title={item.name}>{item.name}</ItemNameCell>
+                        <TableCell>{convertPrice(item.steam_price)}</TableCell>
+                        <TableCell>{item.predictedPrice}</TableCell>
+                        <TableCell>
+                            <TrendIcon isUp={item.overallChange > 0}>
+                            {item.overallChange > 0 ? '↑' : '↓'} {Math.abs(item.overallChange).toFixed(2)}%
+                            </TrendIcon>
+                        </TableCell>
+                        <RecommendationCell>
+                            <RecommendationText isUp={item.overallChange > 0}>
+                            {getRecommendationText(item.overallChange)}
+                            </RecommendationText>
+                        </RecommendationCell>
+                        </TableRow>
+                    ))}
+                    </tbody>
+                </AllRecommendationsTable>
+            </AllRecommendationsTableWrapper>
+        </AllRecommendationsModal>
+      )}
     </FavoritesPageContainer>
   );
 };

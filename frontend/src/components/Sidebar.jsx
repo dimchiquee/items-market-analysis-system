@@ -7,9 +7,9 @@ const SidebarContainer = styled.div`
   left: 0;
   width: 250px;
   height: calc(100vh - 60px);
-  background-color: #1b2838;
-  color: #fff;
-  padding: 1rem;
+  background-color: #282633;
+  color: #E0E0E0;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
 `;
@@ -24,51 +24,72 @@ const FilterSection = styled.div`
 `;
 
 const FilterTitle = styled.h3`
-  margin: 0 0 0.5rem 0;
-  font-size: 1.2rem;
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #9CA3AF;
 `;
 
 const Select = styled.select`
   width: 100%;
-  padding: 0.5rem;
-  border-radius: 4px;
-  background-color: #2a2a2a;
-  color: #fff;
-  border: none;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background-color: #323040;
+  color: #E0E0E0;
+  border: 1px solid #4A475C;
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   &:focus {
     outline: none;
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
   }
 `;
 
 const CheckboxLabel = styled.label`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin: 0.5rem 0;
+  padding: 0.75rem;
+  background-color: #323040;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #4A475C;
+  transition: background-color 0.2s ease;
+  &:hover {
+    background-color: #4A475C;
+  }
 `;
 
 const Checkbox = styled.input`
   cursor: pointer;
+  width: 1em;
+  height: 1em;
+  accent-color: #7C3AED;
 `;
 
 const ResetButtonContainer = styled.div`
   position: sticky;
   bottom: 0;
-  background-color: #1b2838;
-  padding: 0.5rem 0;
+  background-color: #282633;
+  padding: 1.5rem 0 0 0;
 `;
 
 const ResetButton = styled.button`
   width: 100%;
-  padding: 0.5rem;
-  background-color: #4c6b8a;
-  color: #fff;
+  padding: 0.75rem;
+  margin-bottom: 20px;
+  background-color: #4A475C;
+  color: #E0E0E0;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
   &:hover {
-    background-color: #5a7fa3;
+    background-color: #58556d;
   }
   &:focus {
     outline: none;

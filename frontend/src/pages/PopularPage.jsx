@@ -13,8 +13,14 @@ const PopularPageContainer = styled.div`
 const MainContent = styled.div`
   flex-grow: 1;
   padding: 2rem;
-  background-color: #f0f0f0;
+  background-color: #323040;
 `;
+
+const LoadingText = styled.p`
+  color: #9CA3AF;
+  margin-bottom: 1rem;
+`;
+
 
 const RefreshButton = styled.button`
   background-color: #66c0f4;
@@ -33,10 +39,6 @@ const RefreshButton = styled.button`
   }
 `;
 
-const LoadingText = styled.p`
-  color: #666;
-  margin-bottom: 1rem;
-`;
 
 const PopularPage = () => {
   const [user, setUser] = useState(null);

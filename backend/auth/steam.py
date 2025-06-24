@@ -228,7 +228,7 @@ def load_recommendations_cache(steam_id: str) -> Optional[Dict]:
         data = json.loads(row[0])
         timestamp = datetime.fromisoformat(row[1])
         cache_age_hours = (datetime.now() - timestamp).total_seconds() / 3600
-        if cache_age_hours < 24:  # Cache valid for 24 hours
+        if cache_age_hours < 24:
             return data
     return None
 

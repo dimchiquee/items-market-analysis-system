@@ -6,19 +6,23 @@ const LoginContainer = styled.div`
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #f0f0f0;
+  background-color: #f0f2f5;
 `;
 
 const LoginButton = styled.button`
   padding: 12px 24px;
   font-size: 16px;
-  background-color: #171a21;
-  color: #fff;
+  background-color: #282633;
+  color: #E0E0E0;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  transition: background-color 0.2s ease, transform 0.2s ease;
   &:hover {
-    background-color: #2a2f3a;
+    background-color: #323040;
+    transform: translateY(-2px);
   }
 `;
 
