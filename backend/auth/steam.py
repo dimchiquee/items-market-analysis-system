@@ -554,22 +554,48 @@ async def get_inventory(token: str, appid: str):
                                 properties["attributes"] = ["stattrak_available"]
                             if not properties["type"]:
                                 name_lower = market_hash_name.lower()
-                                if "knife" in name_lower or "★" in market_hash_name:
-                                    properties["type"] = "Knife"
-                                elif "pistol" in name_lower or "deagle" in name_lower or "glock" in name_lower:
+                                if any(w in name_lower for w in [
+                                    "glock", "usp-s", "usp", "p2000", "p250", "cz75", "cz75-auto", "cz75a", "deagle",
+                                    "desert eagle",
+                                    "tec-9", "tec9", "five-seven", "fiveseven", "dual berettas", "dual beretta",
+                                    "berettas", "r8 revolver", "revolver"
+                                ]):
                                     properties["type"] = "Pistol"
-                                elif "rifle" in name_lower or "ak-47" in name_lower or "m4a" in name_lower:
+                                elif any(w in name_lower for w in [
+                                    "ak-47", "ak47", "m4a1-s", "m4a1", "m4a4", "aug", "famas", "galil ar", "galilar",
+                                    "sg 553", "sg553"
+                                ]):
                                     properties["type"] = "Rifle"
-                                elif "smg" in name_lower or "mp" in name_lower or "p90" in name_lower:
-                                    properties["type"] = "SMG"
-                                elif "sniper" in name_lower or "awp" in name_lower or "ssg" in name_lower:
+                                elif any(w in name_lower for w in [
+                                    "ssg 08", "ssg08", "g3sg1", "scar-20", "awp"
+                                ]):
                                     properties["type"] = "Sniper Rifle"
-                                elif "shotgun" in name_lower or "nova" in name_lower or "xm1014" in name_lower:
+                                elif any(w in name_lower for w in [
+                                    "mp7", "mp9", "mp5-sd", "mp5", "mac-10", "mac10", "ump-45", "ump45", "p90",
+                                    "pp-bizon", "bizon"
+                                ]):
+                                    properties["type"] = "SMG"
+                                elif any(w in name_lower for w in [
+                                    "nova", "xm1014", "mag-7", "mag7", "sawed-off", "sawedoff"
+                                ]):
                                     properties["type"] = "Shotgun"
-                                elif "machine gun" in name_lower or "negev" in name_lower or "m249" in name_lower:
+                                elif any(w in name_lower for w in [
+                                    "negev", "m249"
+                                ]):
                                     properties["type"] = "Machine Gun"
+                                elif any(w in name_lower for w in [
+                                    "knife", "karambit", "bayonet", "bowie", "butterfly", "classic knife", "falchion",
+                                    "flip knife", "gut knife",
+                                    "huntsman", "kukri", "m9 bayonet", "navaja", "nomad", "paracord", "shadow daggers",
+                                    "skeleton", "stiletto",
+                                    "survival", "talon", "ursus", "canis", "widowmaker", "gypsy", "outdoor", "push"
+                                ]) or "★" in market_hash_name:
+                                    properties["type"] = "Knife"
+                                elif "zeus" in name_lower:
+                                    properties["type"] = "Zeus"
                                 elif "gloves" in name_lower:
                                     properties["type"] = "Gloves"
+
                             if not properties["rarity"]:
                                 for tag in desc.get("tags", []):
                                     if tag.get("category") == "Rarity":
