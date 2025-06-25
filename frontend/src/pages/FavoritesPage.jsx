@@ -322,7 +322,9 @@ const AllRecommendationsModal = styled(ModalOverlay)``;
 
 const AllRecommendationsTableWrapper = styled.div`
   width: 100%;
+  max-height: 70vh;
   overflow-x: auto;
+  overflow-y: auto;
   background: #323040;
   padding: 1rem;
   border-radius: 8px;
