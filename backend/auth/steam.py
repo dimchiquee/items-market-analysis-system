@@ -30,12 +30,12 @@ router = APIRouter()
 
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-REDIRECT_URI = os.getenv("REDIRECT_URI")
+REDIRECT_URL = os.getenv("REDIRECT_URL")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 model_path_CS2 = os.path.join(BASE_DIR, "xgboost_model_730.joblib")
 model_path_DOTA2 = os.path.join(BASE_DIR, "xgboost_model_570.joblib")
 
-if not all([STEAM_API_KEY, JWT_SECRET_KEY, REDIRECT_URI]):
+if not all([STEAM_API_KEY, JWT_SECRET_KEY, REDIRECT_URL]):
     raise ValueError("Missing required environment variables")
 
 DATABASE = "favorites.db"
@@ -407,7 +407,7 @@ async def steam_login():
         "openid.ns": "http://specs.openid.net/auth/2.0",
         "openid.mode": "checkid_setup",
         "openid.realm": "http://localhost:8000",
-        "openid.return_to": REDIRECT_URI,
+        "openid.return_to": REDIRECT_URL,
         "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
         "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
     }
